@@ -1,6 +1,15 @@
 <?php
 header('Content-Type: application/json');
 
+// CORS headers to allow browser fetch from Altervista
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type');
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    exit;
+}
+
 $FEEDS = [
     'toscana' => 'https://regionetoscana.smartregion.toscana.it/mobility/artifacts/gtfs-rt/trip-updates',
     'atac_roma' => 'https://romamobilita.it/sites/default/files/rome_rtgtfs_trip_updates_feed.pb',
