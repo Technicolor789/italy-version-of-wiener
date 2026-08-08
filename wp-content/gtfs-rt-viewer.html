@@ -18,10 +18,12 @@
         .status { padding: 10px; border-radius: 4px; margin-top: 10px; }
         .ok { background: #d4edda; color: #155724; }
         .error { background: #f8d7da; color: #721c24; }
+        .filter-row { margin-top: 10px; }
+        .filter-row input { width: 300px; }
     </style>
 </head>
 <body>
-    <h1>GTFS-RT Viewer</h1>
+    <h1>GTFS-RT TripUpdates Viewer</h1>
     <div class="controls">
         <label>Feed:
             <select id="feed">
@@ -33,12 +35,18 @@
             </select>
         </label>
         <button onclick="loadFeed()">Load</button>
+        <div class="filter-row">
+            <input type="text" id="filter" placeholder="Filter: route, trip, vehicle, stop..." />
+            <button onclick="applyFilter()">Filter</button>
+            <button onclick="clearFilter()">Clear</button>
+        </div>
         <div id="status"></div>
     </div>
     <div id="result"></div>
 
     <script>
         const PROXY_BASE = 'https://autolineeamicizia.altervista.org/wp-content/gtfs-rt-proxy.php?feed=';
+        let lastEntities = [];
 
         async function loadFeed() {
             const feed = document.getElementById('feed').value;
@@ -52,21 +60,74 @@
                 const response = await fetch(url);
                 if (!response.ok) throw new Error('HTTP ' + response.status);
                 const buffer = await response.arrayBuffer();
-                statusEl.innerHTML = '<div class=\"status ok\">OK: ' + buffer.byteLength + ' bytes</div>';
+                statusEl.innerHTML = '<div class="status ok">OK: ' + buffer.byteLength + ' bytes</div>';
 
-                // Try to decode using raw protobuf descriptor for GTFS-RT TripUpdates
-                const text = await decodeTripUpdates(buffer);
-                resultEl.innerHTML = text;
+                lastEntities = decodeTripUpdates(buffer);
+                renderTable(lastEntities, document.getElementById('filter').value);
             } catch (e) {
-                statusEl.innerHTML = '<div class=\"status error\">Error: ' + e.message + '</div>';
+                statusEl.innerHTML = '<div class="status error">Error: ' + e.message + '</div>';
             }
         }
 
-        async function decodeTripUpdates(buffer) {
-            // Minimal GTFS-RT TripUpdates decoder without external .proto files
+        function applyFilter() {
+            renderTable(lastEntities, document.getElementById('filter').value);
+        }
+
+        function clearFilter() {
+            document.getElementById('filter').value = '';
+            renderTable(lastEntities, '');
+        }
+
+        function renderTable(entities, query) {
+            const resultEl = document.getElementById('result');
+            if (!entities.length) {
+                resultEl.innerHTML = '<p>No entities found in feed.</p>';
+                return;
+            }
+
+            const q = (query || '').trim().toLowerCase();
+            let rows = '<table><tr><th>Trip ID</th><th>Route</th><th>Stop ID</th><th>Arrival (delay)</th><th>Vehicle</th><th>Timestamp</th></tr>';
+
+            for (const ent of entities) {
+                if (!ent.tripUpdate) continue;
+                const trip = ent.tripUpdate.trip || {};
+                const vehicle = ent.tripUpdate.vehicle || {};
+                const ts = ent.tripUpdate.timestamp || '';
+                const route = trip.route_id || '-';
+                const tripId = trip.trip_id || '-';
+                const vehicleId = vehicle.id || '-';
+
+                const updates = ent.tripUpdate.stopTimeUpdates || [];
+                if (updates.length === 0) {
+                    if (q && !matches(route, tripId, vehicleId, '-', q)) continue;
+                    rows += `<tr><td>${tripId}</td><td>${route}</td><td>-</td><td>-</td><td>${vehicleId}</td><td>${ts}</td></tr>`;
+                } else {
+                    for (const u of updates) {
+                        const arrival = u.arrival || {};
+                        const delay = arrival.delay !== undefined ? arrival.delay + 's' : '-';
+                        const time = arrival.time ? new Date(arrival.time * 1000).toISOString() : '-';
+                        const stopId = u.stop_id || '-';
+                        if (q && !matches(route, tripId, vehicleId, stopId, q)) continue;
+                        rows += `<tr><td>${tripId}</td><td>${route}</td><td>${stopId}</td><td>${time} (${delay})</td><td>${vehicleId}</td><td>${ts}</td></tr>`;
+                    }
+                }
+            }
+
+            rows += '</table>';
+            resultEl.innerHTML = rows;
+        }
+
+        function matches(route, trip, vehicle, stop, q) {
+            return route.toLowerCase().includes(q) ||
+                   trip.toLowerCase().includes(q) ||
+                   vehicle.toLowerCase().includes(q) ||
+                   stop.toLowerCase().includes(q);
+        }
+
+        function decodeTripUpdates(buffer) {
             const view = new DataView(buffer);
             let offset = 0;
-            let rows = '';
+            const entities = [];
 
             function readVarint() {
                 let result = 0;
@@ -80,58 +141,47 @@
                 return result;
             }
 
-            function readFixed64() {
-                const val = view.getFloat64(offset, true);
-                offset += 8;
-                return val;
-            }
-
-            function readFixed32() {
-                const val = view.getFloat32(offset, true);
-                offset += 4;
-                return val;
-            }
-
-            function readBytes(length) {
-                const bytes = new Uint8Array(buffer, offset, length);
-                offset += length;
-                return String.fromCharCode.apply(null, bytes);
+            function readBytes(len) {
+                const bytes = new Uint8Array(buffer, offset, len);
+                offset += len;
+                // Use TextDecoder for safer string conversion
+                return new TextDecoder().decode(bytes);
             }
 
             function readField() {
                 const tag = readVarint();
-                const fieldNumber = tag >>> 3;
-                const wireType = tag & 0x07;
-                return { fieldNumber, wireType };
+                return { fieldNumber: tag >>> 3, wireType: tag & 0x07 };
             }
 
-            // GTFS-RT TripUpdates message numbers
-            // 1: header
-            // 2: entity
+            function skip(wireType) {
+                if (wireType === 0) readVarint();
+                else if (wireType === 1) offset += 8;
+                else if (wireType === 2) { const l = readVarint(); offset += l; }
+                else if (wireType === 5) offset += 4;
+            }
+
+            // GTFS-RT FeedMessage structure:
+            // 1: header (FeedHeader) - length-delimited protobuf, skip
+            // 2: entity (FeedEntity) - length-delimited protobuf
             //   1: id
-            //   3: trip_update
-            //     1: trip
+            //   3: trip_update (TripUpdate) - length-delimited
+            //     1: trip (TripDescriptor)
             //       1: trip_id
             //       2: route_id
-            //     2: stop_time_update
-            //       1: stop_sequence
+            //     2: stop_time_update (StopTimeUpdate) - repeated
             //       2: stop_id
-            //       3: arrival
+            //       3: arrival (StopTimeEvent)
             //         1: time
             //         2: delay
-            //       4: departure
-            //     3: vehicle
+            //     3: vehicle (VehicleDescriptor)
             //       1: id
             //     4: timestamp
-
-            let header = {};
-            let entities = [];
 
             while (offset < buffer.byteLength) {
                 const { fieldNumber, wireType } = readField();
                 if (fieldNumber === 1 && wireType === 2) {
                     const len = readVarint();
-                    header = JSON.parse(readBytes(len));
+                    offset += len; // skip FeedHeader
                 } else if (fieldNumber === 2 && wireType === 2) {
                     const len = readVarint();
                     const entityBytes = new Uint8Array(buffer, offset, len);
@@ -143,36 +193,10 @@
                 }
             }
 
-            if (entities.length === 0) return '<p>No entities found in feed.</p>';
-
-            rows += '<table><tr><th>Trip ID</th><th>Route</th><th>Stop ID</th><th>Arrival (delay)</th><th>Vehicle</th><th>Timestamp</th></tr>';
-            for (const ent of entities) {
-                if (!ent.tripUpdate) continue;
-                const trip = ent.tripUpdate.trip || {};
-                const vehicle = ent.tripUpdate.vehicle || {};
-                const ts = ent.tripUpdate.timestamp || '';
-                const route = trip.route_id || '-';
-                const tripId = trip.trip_id || '-';
-                const vehicleId = vehicle.id || '-';
-
-                const updates = ent.tripUpdate.stopTimeUpdates || [];
-                if (updates.length === 0) {
-                    rows += `<tr><td>${tripId}</td><td>${route}</td><td>-</td><td>-</td><td>${vehicleId}</td><td>${ts}</td></tr>`;
-                } else {
-                    for (const u of updates) {
-                        const arrival = u.arrival || {};
-                        const delay = arrival.delay !== undefined ? arrival.delay + 's' : '-';
-                        const time = arrival.time ? new Date(arrival.time * 1000).toISOString() : '-';
-                        rows += `<tr><td>${tripId}</td><td>${route}</td><td>${u.stop_id || '-'}</td><td>${time} (${delay})</td><td>${vehicleId}</td><td>${ts}</td></tr>`;
-                    }
-                }
-            }
-            rows += '</table>';
-            return rows;
+            return entities;
         }
 
         function parseEntity(bytes) {
-            const view = new DataView(bytes.buffer || bytes);
             const buf = new Uint8Array(bytes.buffer || bytes);
             let offset = 0;
             const result = {};
@@ -189,7 +213,7 @@
             }
 
             function readBytes(len) {
-                const s = String.fromCharCode.apply(null, buf.subarray(offset, offset + len));
+                const s = new TextDecoder().decode(buf.subarray(offset, offset + len));
                 offset += len;
                 return s;
             }
@@ -220,7 +244,6 @@
         }
 
         function parseTripUpdate(bytes) {
-            const view = new DataView(bytes.buffer || bytes);
             const buf = new Uint8Array(bytes.buffer || bytes);
             let offset = 0;
             const result = {};
@@ -237,7 +260,7 @@
             }
 
             function readBytes(len) {
-                const s = String.fromCharCode.apply(null, buf.subarray(offset, offset + len));
+                const s = new TextDecoder().decode(buf.subarray(offset, offset + len));
                 offset += len;
                 return s;
             }
@@ -262,17 +285,8 @@
                     offset += len;
                 } else if (fieldNumber === 2 && wireType === 2) {
                     const len = readVarint();
-                    const updates = [];
-                    const sub = buf.subarray(offset, offset + len);
+                    result.stopTimeUpdates = parseStopTimeUpdates(buf.subarray(offset, offset + len));
                     offset += len;
-                    let uOff = 0;
-                    while (uOff < sub.length) {
-                        const u = parseStopTimeUpdate(sub.subarray(uOff));
-                        if (u && Object.keys(u).length) updates.push(u);
-                        // rough advance; actual parsing returns consumed bytes in a real impl
-                        uOff = sub.length;
-                    }
-                    result.stopTimeUpdates = updates;
                 } else if (fieldNumber === 3 && wireType === 2) {
                     const len = readVarint();
                     result.vehicle = { id: readBytes(len) };
@@ -302,7 +316,7 @@
             }
 
             function readBytes(len) {
-                const s = String.fromCharCode.apply(null, buf.subarray(offset, offset + len));
+                const s = new TextDecoder().decode(buf.subarray(offset, offset + len));
                 offset += len;
                 return s;
             }
@@ -332,6 +346,53 @@
             return result;
         }
 
+        function parseStopTimeUpdates(bytes) {
+            const buf = new Uint8Array(bytes.buffer || bytes);
+            let offset = 0;
+            const updates = [];
+
+            function readVarint() {
+                let r = 0, shift = 0;
+                while (offset < buf.byteLength) {
+                    const b = buf[offset++];
+                    r |= (b & 0x7F) << shift;
+                    if ((b & 0x80) === 0) break;
+                    shift += 7;
+                }
+                return r;
+            }
+
+            function readBytes(len) {
+                const s = new TextDecoder().decode(buf.subarray(offset, offset + len));
+                offset += len;
+                return s;
+            }
+
+            function readField() {
+                const tag = readVarint();
+                return { fieldNumber: tag >>> 3, wireType: tag & 0x07 };
+            }
+
+            function skip(wireType) {
+                if (wireType === 0) readVarint();
+                else if (wireType === 1) offset += 8;
+                else if (wireType === 2) { const l = readVarint(); offset += l; }
+                else if (wireType === 5) offset += 4;
+            }
+
+            while (offset < buf.length) {
+                const { fieldNumber, wireType } = readField();
+                if (fieldNumber === 2 && wireType === 2) {
+                    const len = readVarint();
+                    updates.push(parseStopTimeUpdate(buf.subarray(offset, offset + len)));
+                    offset += len;
+                } else {
+                    skip(wireType);
+                }
+            }
+            return updates;
+        }
+
         function parseStopTimeUpdate(bytes) {
             const buf = new Uint8Array(bytes.buffer || bytes);
             let offset = 0;
@@ -349,7 +410,7 @@
             }
 
             function readBytes(len) {
-                const s = String.fromCharCode.apply(null, buf.subarray(offset, offset + len));
+                const s = new TextDecoder().decode(buf.subarray(offset, offset + len));
                 offset += len;
                 return s;
             }
