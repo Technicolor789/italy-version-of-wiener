@@ -86,6 +86,23 @@ For custom feeds:
 curl "https://autolineeamicizia.altervista.org/wp-content/gtfs-rt-proxy.php?url=https%3A%2F%2Fexample.com%2Ffeed.pb" -o custom.pb
 ```
 
+### 4. Test with a simple HTML page
+
+Upload `wp-content/gtfs-rt-viewer.html` to your WordPress installation
+and open it in a browser:
+
+```
+https://autolineeamicizia.altervista.org/wp-content/gtfs-rt-viewer.html
+```
+
+This page:
+- fetches the GTFS-RT feed through the proxy
+- decodes the protobuf in the browser
+- shows a table of trip updates
+
+This is the fastest way to verify that your WordPress/Altervista setup
+can fetch and serve real-time data before flashing the ESP32.
+
 ## ESP32 usage
 
 Point the ESP32 to your proxy URLs instead of the direct `.pb` links:
@@ -95,7 +112,7 @@ Point the ESP32 to your proxy URLs instead of the direct `.pb` links:
   "https://autolineeamicizia.altervista.org/wp-content/gtfs-rt-proxy.php?feed="
 ```
 
-Then pass the feed name as the RBL/stop parameter in the WiFiManager config.
+Then enter the feed name in the WiFiManager `RBL/Stop ID` field.
 
 ## Notes
 
