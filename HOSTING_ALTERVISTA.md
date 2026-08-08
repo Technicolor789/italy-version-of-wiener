@@ -62,12 +62,48 @@ HTTP/1.1 200 OK
 Content-Type: application/x-protobuf
 ```
 
+### 4. Alternative: GTFS-RT proxy script
+
+If Altervista still blocks direct `.pb` serving, use the included
+`wp-content/gtfs-rt-proxy.php` script.
+
+Preset feeds:
+- `toscana`
+- `atac_roma`
+- `actv_veneto`
+- `busitalia_veneto`
+- `busitalia_tram`
+
+Examples:
+```bash
+curl -I "https://autolineeamicizia.altervista.org/wp-content/gtfs-rt-proxy.php?feed=toscana"
+curl -I "https://autolineeamicizia.altervista.org/wp-content/gtfs-rt-proxy.php?feed=atac_roma"
+curl "https://autolineeamicizia.altervista.org/wp-content/gtfs-rt-proxy.php?feed=busitalia_veneto" -o busitalia.pb
+```
+
+For custom feeds:
+```bash
+curl "https://autolineeamicizia.altervista.org/wp-content/gtfs-rt-proxy.php?url=https%3A%2F%2Fexample.com%2Ffeed.pb" -o custom.pb
+```
+
+## ESP32 usage
+
+Point the ESP32 to your proxy URLs instead of the direct `.pb` links:
+
+```cpp
+#define URL_BASE \
+  "https://autolineeamicizia.altervista.org/wp-content/gtfs-rt-proxy.php?feed="
+```
+
+Then pass the feed name as the RBL/stop parameter in the WiFiManager config.
+
 ## Notes
 
 - On Altervista's **free WordPress plan**, `.htaccess` access can be
-  limited. If `.htaccess` changes are ignored, use a plugin such as
-  **WP Add Mime Types** and ask Altervista support to confirm that
-  `.pb` MIME mapping is allowed on your domain.
+  limited. If `.htaccess` changes are ignored, use the proxy script as
+  the reliable fallback.
+- For Milano, wait for the API key and add it either to the proxy script
+  as a new preset or pass it via query string if the feed supports it.
 - If you move the `.pb` file outside `wp-content/uploads/`, make sure
   the file permissions are world-readable (`644`) and the path matches
   exactly.
