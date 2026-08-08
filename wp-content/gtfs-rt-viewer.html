@@ -56,7 +56,7 @@
             resultEl.innerHTML = '';
 
             try {
-                const url = PROXY_BASE + encodeURIComponent(feed) + '/';
+                const url = PROXY_BASE + encodeURIComponent(feed);
                 const response = await fetch(url);
                 if (!response.ok) throw new Error('HTTP ' + response.status);
                 const buffer = await response.arrayBuffer();
