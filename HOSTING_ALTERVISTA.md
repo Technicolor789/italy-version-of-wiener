@@ -62,31 +62,25 @@ HTTP/1.1 200 OK
 Content-Type: application/x-protobuf
 ```
 
-### 4. Alternative: GTFS-RT proxy script
+### 4. GTFS-RT proxy plugin (recommended on Altervista)
 
-If Altervista still blocks direct `.pb` serving, use the included
-`wp-content/gtfs-rt-proxy.php` script.
+Altervista's free WordPress often blocks direct PHP execution in
+`wp-content/`, which causes 500 errors. The reliable method is to use
+the included WordPress plugin.
 
-Preset feeds:
-- `toscana`
-- `atac_roma`
-- `actv_veneto`
-- `busitalia_veneto`
-- `busitalia_tram`
+1. Create the folder `wp-content/plugins/gtfs-rt-proxy/`
+2. Upload `wp-content/plugins/gtfs-rt-proxy/gtfs-rt-proxy.php`
+3. In WordPress admin, go to **Plugins** and activate **GTFS-RT Proxy**
+4. After activation, the proxy URLs are:
+   ```
+   https://autolineeamicizia.altervista.org/gtfs-rt-proxy/toscana
+   https://autolineeamicizia.altervista.org/gtfs-rt-proxy/atac_roma
+   https://autolineeamicizia.altervista.org/gtfs-rt-proxy/actv_veneto
+   https://autolineeamicizia.altervista.org/gtfs-rt-proxy/busitalia_veneto
+   https://autolineeamicizia.altervista.org/gtfs-rt-proxy/busitalia_tram
+   ```
 
-Examples:
-```bash
-curl -I "https://autolineeamicizia.altervista.org/wp-content/gtfs-rt-proxy.php?feed=toscana"
-curl -I "https://autolineeamicizia.altervista.org/wp-content/gtfs-rt-proxy.php?feed=atac_roma"
-curl "https://autolineeamicizia.altervista.org/wp-content/gtfs-rt-proxy.php?feed=busitalia_veneto" -o busitalia.pb
-```
-
-For custom feeds:
-```bash
-curl "https://autolineeamicizia.altervista.org/wp-content/gtfs-rt-proxy.php?url=https%3A%2F%2Fexample.com%2Ffeed.pb" -o custom.pb
-```
-
-### 4. Test with a simple HTML page
+### 5. Test with a simple HTML page
 
 Upload `wp-content/gtfs-rt-viewer.html` to your WordPress installation
 and open it in a browser:
@@ -109,7 +103,7 @@ Point the ESP32 to your proxy URLs instead of the direct `.pb` links:
 
 ```cpp
 #define URL_BASE \
-  "https://autolineeamicizia.altervista.org/wp-content/gtfs-rt-proxy.php?feed="
+  "https://autolineeamicizia.altervista.org/gtfs-rt-proxy/"
 ```
 
 Then enter the feed name in the WiFiManager `RBL/Stop ID` field.
