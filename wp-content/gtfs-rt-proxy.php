@@ -2,6 +2,8 @@
 /**
  * GTFS-RT Proxy for Altervista WordPress
  *
+ * Standalone proxy: does not require WordPress to be loaded.
+ *
  * Usage:
  *   https://autolineeamicizia.altervista.org/wp-content/gtfs-rt-proxy.php?url=<ENCODED_FEED_URL>
  *
@@ -62,13 +64,23 @@ if ($parsed === false || empty($parsed['scheme']) || !in_array(strtolower($parse
 }
 
 // If the requested URL is not one of the preset feeds, require explicit allow
-$allowed_hosts = array_unique(array_map('parse_url', $FEEDS, array_fill(0, count($FEEDS), null)));
-$allowed_hosts = array_values(array_filter(array_map(function ($u) { return $u['host'] ?? null; }, $allowed_hosts)));
+$allowed_hosts = array_values(array_unique(array_filter(array_map(function ($u) {
+    $p = parse_url($u);
+    return $p['host'] ?? null;
+}, $FEEDS))));
 
 if (!in_array($parsed['host'], $allowed_hosts, true)) {
     http_response_code(403);
     header('Content-Type: application/json');
     echo json_encode(['error' => 'Host not allowed', 'host' => $parsed['host']]);
+    exit;
+}
+
+// Check cURL availability
+if (!function_exists('curl_init')) {
+    http_response_code(500);
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'cURL is not available on this server']);
     exit;
 }
 
@@ -81,12 +93,13 @@ curl_setopt_array($ch, [
     CURLOPT_CONNECTTIMEOUT => 10,
     CURLOPT_TIMEOUT        => 30,
     CURLOPT_SSL_VERIFYPEER => true,
-    CURLOPT_USERAGENT      => 'GTFS-RT-Proxy/1.0 (+' . home_url() . ')',
+    CURLOPT_USERAGENT      => 'GTFS-RT-Proxy/1.0',
 ]);
 
 $body = curl_exec($ch);
 $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 $curl_error = curl_error($ch);
+$errno = curl_errno($ch);
 curl_close($ch);
 
 if ($body === false || $http_code !== 200) {
@@ -95,6 +108,7 @@ if ($body === false || $http_code !== 200) {
     echo json_encode([
         'error'      => 'Failed to fetch remote feed',
         'http_code'  => $http_code,
+        'errno'      => $errno,
         'curl_error' => $curl_error ?: null,
         'remote_url' => $remote_url,
     ]);
