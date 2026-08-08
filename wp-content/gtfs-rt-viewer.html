@@ -45,7 +45,8 @@
     <div id="result"></div>
 
     <script>
-        const PROXY_BASE = 'https://autolineeamicizia.altervista.org/gtfs-rt-proxy/';
+        // Replace this with your Cloudflare Worker URL after deploy
+        const PROXY_BASE = 'https://YOUR-WORKER-URL.workers.dev/';
         let lastEntities = [];
 
         async function loadFeed() {
