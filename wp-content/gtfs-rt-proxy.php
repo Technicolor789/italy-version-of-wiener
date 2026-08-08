@@ -85,7 +85,7 @@ curl_setopt_array($ch, [
 ]);
 
 $body = curl_exec($ch);
-$http_code = curl_getinfo($ch, CURLINFO_TP_CODE);
+$http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 $curl_error = curl_error($ch);
 curl_close($ch);
 
