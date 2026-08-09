@@ -37,7 +37,7 @@
         </label>
         <button onclick="loadFeed()">Load</button>
         <div class="filter-row">
-            <input type="text" id="filter" placeholder="Filter: route, trip, vehicle id, plate, stop..." />
+            <input type="text" id="filter" placeholder="Filter: route, trip, vehicle id, matricola, targa, stop..." />
             <button onclick="applyFilter()">Filter</button>
             <button onclick="clearFilter()">Clear</button>
         </div>
@@ -121,14 +121,12 @@
                 const vehicleId = vehicle.id || '-';
                 const vehicleLabel = vehicle.label || '';
                 const licensePlate = vehicle.licensePlate || '';
-                const licensePlateDisplay = [vehicleLabel, licensePlate].filter(Boolean).join(' ') || '-';
-                const vehicleDisplay = [vehicleId, vehicleLabel, licensePlate].filter(Boolean).join(' ') || '-';
 
                 const updates = ent.tripUpdate.stopTimeUpdate || [];
                 if (updates.length === 0) {
                     const key = vehicleId || tripId;
                     if (!byVehicle.has(key)) {
-                        byVehicle.set(key, { route, tripId, vehicleId, vehicleLabel, licensePlate: licensePlateDisplay, stopId: '-', time: '-', delay: '-', ts });
+                        byVehicle.set(key, { route, tripId, vehicleId, vehicleLabel, licensePlate, stopId: '-', time: '-', delay: '-', ts });
                     }
                     continue;
                 }
@@ -152,7 +150,7 @@
                 const delay = best ? (best.delay !== undefined ? best.delay + 's' : '-') : '-';
 
                 if (!existing) {
-                    byVehicle.set(key, { route, tripId, vehicleId, vehicleLabel, licensePlate: licensePlateDisplay, stopId, time, delay, ts });
+                    byVehicle.set(key, { route, tripId, vehicleId, vehicleLabel, licensePlate, stopId, time, delay, ts });
                 } else {
                     // Keep the earliest upcoming stop
                     if (best && (existing.time === '-' || best.time < new Date(existing.time).getTime() / 1000)) {
@@ -165,24 +163,25 @@
 
             if (q) {
                 for (const [key, row] of byVehicle) {
-                    if (!matches(row.route, row.tripId, row.vehicleId, row.licensePlate, row.stopId, q)) {
+                    if (!matches(row.route, row.tripId, row.vehicleId, row.vehicleLabel, row.licensePlate, row.stopId, q)) {
                         byVehicle.delete(key);
                     }
                 }
             }
 
-            let rows = '<table><tr><th>Trip ID</th><th>Route</th><th>Stop ID</th><th>Arrival (delay)</th><th>Vehicle ID</th><th>License Plate</th><th>Timestamp</th></tr>';
+            let rows = '<table><tr><th>Trip ID</th><th>Route</th><th>Stop ID</th><th>Arrival (delay)</th><th>Vehicle ID</th><th>Matricola</th><th>Targa</th><th>Timestamp</th></tr>';
             for (const [key, row] of byVehicle) {
-                rows += `<tr><td>${row.tripId}</td><td>${row.route}</td><td>${row.stopId}</td><td>${row.time} (${row.delay})</td><td>${row.vehicleId}</td><td>${row.licensePlate}</td><td>${row.ts}</td></tr>`;
+                rows += `<tr><td>${row.tripId}</td><td>${row.route}</td><td>${row.stopId}</td><td>${row.time} (${row.delay})</td><td>${row.vehicleId}</td><td>${row.vehicleLabel}</td><td>${row.licensePlate}</td><td>${row.ts}</td></tr>`;
             }
             rows += '</table>';
             resultEl.innerHTML = rows;
         }
 
-        function matches(route, trip, vehicleId, licensePlate, stop, q) {
+        function matches(route, trip, vehicleId, vehicleLabel, licensePlate, stop, q) {
             return route.toLowerCase().includes(q) ||
                    trip.toLowerCase().includes(q) ||
                    (vehicleId || '').toLowerCase().includes(q) ||
+                   (vehicleLabel || '').toLowerCase().includes(q) ||
                    (licensePlate || '').toLowerCase().includes(q) ||
                    stop.toLowerCase().includes(q);
         }
