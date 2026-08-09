@@ -48,6 +48,15 @@
     <script>
         const PROXY_BASE = 'https://italy-version-of-wiener.onrender.com/proxy.php?feed=';
         let lastEntities = [];
+        let root = null;
+
+        async function loadProto() {
+            if (root) return root;
+            const resp = await fetch('https://raw.githubusercontent.com/google/transit/master/gtfs-realtime/proto/gtfs-realtime.proto');
+            const text = await resp.text();
+            root = protobuf.parse(text).root;
+            return root;
+        }
 
         async function loadFeed() {
             const feed = document.getElementById('feed').value;
@@ -63,426 +72,69 @@
                 const buffer = await response.arrayBuffer();
                 statusEl.innerHTML = '<div class="status ok">OK: ' + buffer.byteLength + ' bytes</div>';
 
-                const text = await decodeTripUpdates(buffer);
-                resultEl.innerHTML = text;
+                const FeedMessage = (await loadProto()).lookupType('transit_realtime.FeedMessage');
+                const message = FeedMessage.decode(new Uint8Array(buffer));
+                lastEntities = message.entity || [];
+
+                renderTable(lastEntities, document.getElementById('filter').value);
             } catch (e) {
                 statusEl.innerHTML = '<div class="status error">Error: ' + e.message + '</div>';
             }
         }
 
         function applyFilter() {
-            // Re-run last decode if needed, or just show message
-            document.getElementById('status').innerHTML = '<div class=\"status ok\">Filter applied. Reload feed to refresh.</div>';
+            renderTable(lastEntities, document.getElementById('filter').value);
         }
 
         function clearFilter() {
             document.getElementById('filter').value = '';
-            document.getElementById('status').innerHTML = '<div class=\"status ok\">Filter cleared. Reload feed to refresh.</div>';
+            renderTable(lastEntities, '');
         }
 
-        async function decodeTripUpdates(buffer) {
-            const view = new DataView(buffer);
-            let offset = 0;
-            let rows = '';
-
-            function readVarint() {
-                let result = 0;
-                let shift = 0;
-                while (offset < buffer.byteLength) {
-                    const b = view.getUint8(offset++);
-                    result |= (b & 0x7F) << shift;
-                    if ((b & 0x80) === 0) break;
-                    shift += 7;
-                }
-                return result;
+        function renderTable(entities, query) {
+            const resultEl = document.getElementById('result');
+            if (!entities.length) {
+                resultEl.innerHTML = '<p>No entities found in feed.</p>';
+                return;
             }
 
-            function readBytes(len) {
-                const bytes = new Uint8Array(buffer, offset, len);
-                offset += len;
-                let str = '';
-                for (let i = 0; i < bytes.length; i++) {
-                    str += String.fromCharCode(bytes[i]);
-                }
-                return str;
-            }
+            const q = (query || '').trim().toLowerCase();
+            let rows = '<table><tr><th>Trip ID</th><th>Route</th><th>Stop ID</th><th>Arrival (delay)</th><th>Vehicle</th><th>Timestamp</th></tr>';
 
-            function readField() {
-                const tag = readVarint();
-                return { fieldNumber: tag >>> 3, wireType: tag & 0x07 };
-            }
-
-            function skip(wireType) {
-                if (wireType === 0) readVarint();
-                else if (wireType === 1) offset += 8;
-                else if (wireType === 2) { const l = readVarint(); offset += l; }
-                else if (wireType === 5) offset += 4;
-            }
-
-            let header = null;
-            let entities = [];
-
-            while (offset < buffer.byteLength) {
-                const { fieldNumber, wireType } = readField();
-                if (fieldNumber === 1 && wireType === 2) {
-                    const len = readVarint();
-                    header = readBytes(len);
-                } else if (fieldNumber === 2 && wireType === 2) {
-                    const len = readVarint();
-                    const entityBytes = new Uint8Array(buffer, offset, len);
-                    offset += len;
-                    const entity = parseEntity(entityBytes);
-                    if (entity) entities.push(entity);
-                } else {
-                    skip(wireType);
-                }
-            }
-
-            if (entities.length === 0) {
-                rows += '<p>No entities found. Raw header: <pre>' + escapeHtml(header || 'none') + '</pre></p>';
-                return rows;
-            }
-
-            rows += '<table><tr><th>Trip ID</th><th>Route</th><th>Stop ID</th><th>Arrival (delay)</th><th>Vehicle</th><th>Timestamp</th></tr>';
             for (const ent of entities) {
                 if (!ent.tripUpdate) continue;
                 const trip = ent.tripUpdate.trip || {};
                 const vehicle = ent.tripUpdate.vehicle || {};
                 const ts = ent.tripUpdate.timestamp || '';
-                const route = trip.route_id || '-';
-                const tripId = trip.trip_id || '-';
+                const route = trip.routeId || '-';
+                const tripId = trip.tripId || '-';
                 const vehicleId = vehicle.id || '-';
 
-                const updates = ent.tripUpdate.stopTimeUpdates || [];
+                const updates = ent.tripUpdate.stopTimeUpdate || [];
                 if (updates.length === 0) {
+                    if (q && !matches(route, tripId, vehicleId, '-', q)) continue;
                     rows += `<tr><td>${tripId}</td><td>${route}</td><td>-</td><td>-</td><td>${vehicleId}</td><td>${ts}</td></tr>`;
                 } else {
                     for (const u of updates) {
                         const arrival = u.arrival || {};
                         const delay = arrival.delay !== undefined ? arrival.delay + 's' : '-';
                         const time = arrival.time ? new Date(arrival.time * 1000).toISOString() : '-';
-                        const stopId = u.stop_id || '-';
+                        const stopId = u.stopId || '-';
+                        if (q && !matches(route, tripId, vehicleId, stopId, q)) continue;
                         rows += `<tr><td>${tripId}</td><td>${route}</td><td>${stopId}</td><td>${time} (${delay})</td><td>${vehicleId}</td><td>${ts}</td></tr>`;
                     }
                 }
             }
+
             rows += '</table>';
-            return rows;
+            resultEl.innerHTML = rows;
         }
 
-        function parseEntity(bytes) {
-            const buf = new Uint8Array(bytes.buffer || bytes);
-            let offset = 0;
-            const result = {};
-
-            function readVarint() {
-                let r = 0, shift = 0;
-                while (offset < buf.byteLength) {
-                    const b = buf[offset++];
-                    r |= (b & 0x7F) << shift;
-                    if ((b & 0x80) === 0) break;
-                    shift += 7;
-                }
-                return r;
-            }
-
-            function readBytes(len) {
-                const bytes = new Uint8Array(buf.buffer, buf.byteOffset + offset, len);
-                offset += len;
-                let str = '';
-                for (let i = 0; i < bytes.length; i++) {
-                    str += String.fromCharCode(bytes[i]);
-                }
-                return str;
-            }
-
-            function readField() {
-                const tag = readVarint();
-                return { fieldNumber: tag >>> 3, wireType: tag & 0x07 };
-            }
-
-            function skip(wireType) {
-                if (wireType === 0) readVarint();
-                else if (wireType === 1) offset += 8;
-                else if (wireType === 2) { const l = readVarint(); offset += l; }
-                else if (wireType === 5) offset += 4;
-            }
-
-            while (offset < buf.byteLength) {
-                const { fieldNumber, wireType } = readField();
-                if (fieldNumber === 1 && wireType === 2) {
-                    result.id = readBytes(readVarint());
-                } else if (fieldNumber === 3 && wireType === 2) {
-                    const len = readVarint();
-                    result.tripUpdate = parseTripUpdate(new Uint8Array(buf.buffer, buf.byteOffset + offset, len));
-                    offset += len;
-                } else {
-                    skip(wireType);
-                }
-            }
-            return result;
-        }
-
-        function parseTripUpdate(bytes) {
-            const buf = new Uint8Array(bytes.buffer || bytes);
-            let offset = 0;
-            const result = {};
-
-            function readVarint() {
-                let r = 0, shift = 0;
-                while (offset < buf.byteLength) {
-                    const b = buf[offset++];
-                    r |= (b & 0x7F) << shift;
-                    if ((b & 0x80) === 0) break;
-                    shift += 7;
-                }
-                return r;
-            }
-
-            function readBytes(len) {
-                const bytes = new Uint8Array(buf.buffer, buf.byteOffset + offset, len);
-                offset += len;
-                let str = '';
-                for (let i = 0; i < bytes.length; i++) {
-                    str += String.fromCharCode(bytes[i]);
-                }
-                return str;
-            }
-
-            function readField() {
-                const tag = readVarint();
-                return { fieldNumber: tag >>> 3, wireType: tag & 0x07 };
-            }
-
-            function skip(wireType) {
-                if (wireType === 0) readVarint();
-                else if (wireType === 1) offset += 8;
-                else if (wireType === 2) { const l = readVarint(); offset += l; }
-                else if (wireType === 5) offset += 4;
-            }
-
-            while (offset < buf.byteLength) {
-                const { fieldNumber, wireType } = readField();
-                if (fieldNumber === 1 && wireType === 2) {
-                    const len = readVarint();
-                    result.trip = parseTrip(new Uint8Array(buf.buffer, buf.byteOffset + offset, len));
-                    offset += len;
-                } else if (fieldNumber === 2 && wireType === 2) {
-                    const len = readVarint();
-                    result.stopTimeUpdates = parseStopTimeUpdates(new Uint8Array(buf.buffer, buf.byteOffset + offset, len));
-                    offset += len;
-                } else if (fieldNumber === 3 && wireType === 2) {
-                    const len = readVarint();
-                    result.vehicle = { id: readBytes(len) };
-                } else if (fieldNumber === 4 && wireType === 0) {
-                    result.timestamp = readVarint();
-                } else {
-                    skip(wireType);
-                }
-            }
-            return result;
-        }
-
-        function parseTrip(bytes) {
-            const buf = new Uint8Array(bytes.buffer || bytes);
-            let offset = 0;
-            const result = {};
-
-            function readVarint() {
-                let r = 0, shift = 0;
-                while (offset < buf.byteLength) {
-                    const b = buf[offset++];
-                    r |= (b & 0x7F) << shift;
-                    if ((b & 0x80) === 0) break;
-                    shift += 7;
-                }
-                return r;
-            }
-
-            function readBytes(len) {
-                const bytes = new Uint8Array(buf.buffer, buf.byteOffset + offset, len);
-                offset += len;
-                let str = '';
-                for (let i = 0; i < bytes.length; i++) {
-                    str += String.fromCharCode(bytes[i]);
-                }
-                return str;
-            }
-
-            function readField() {
-                const tag = readVarint();
-                return { fieldNumber: tag >>> 3, wireType: tag & 0x07 };
-            }
-
-            function skip(wireType) {
-                if (wireType === 0) readVarint();
-                else if (wireType === 1) offset += 8;
-                else if (wireType === 2) { const l = readVarint(); offset += l; }
-                else if (wireType === 5) offset += 4;
-            }
-
-            while (offset < buf.length) {
-                const { fieldNumber, wireType } = readField();
-                if (fieldNumber === 1 && wireType === 2) {
-                    result.trip_id = readBytes(readVarint());
-                } else if (fieldNumber === 2 && wireType === 2) {
-                    result.route_id = readBytes(readVarint());
-                } else {
-                    skip(wireType);
-                }
-            }
-            return result;
-        }
-
-        function parseStopTimeUpdates(bytes) {
-            const buf = new Uint8Array(bytes.buffer || bytes);
-            let offset = 0;
-            const updates = [];
-
-            function readVarint() {
-                let r = 0, shift = 0;
-                while (offset < buf.byteLength) {
-                    const b = buf[offset++];
-                    r |= (b & 0x7F) << shift;
-                    if ((b & 0x80) === 0) break;
-                    shift += 7;
-                }
-                return r;
-            }
-
-            function readBytes(len) {
-                const bytes = new Uint8Array(buf.buffer, buf.byteOffset + offset, len);
-                offset += len;
-                let str = '';
-                for (let i = 0; i < bytes.length; i++) {
-                    str += String.fromCharCode(bytes[i]);
-                }
-                return str;
-            }
-
-            function readField() {
-                const tag = readVarint();
-                return { fieldNumber: tag >>> 3, wireType: tag & 0x07 };
-            }
-
-            function skip(wireType) {
-                if (wireType === 0) readVarint();
-                else if (wireType === 1) offset += 8;
-                else if (wireType === 2) { const l = readVarint(); offset += l; }
-                else if (wireType === 5) offset += 4;
-            }
-
-            while (offset < buf.length) {
-                const { fieldNumber, wireType } = readField();
-                if (fieldNumber === 2 && wireType === 2) {
-                    const len = readVarint();
-                    updates.push(parseStopTimeUpdate(new Uint8Array(buf.buffer, buf.byteOffset + offset, len)));
-                    offset += len;
-                } else {
-                    skip(wireType);
-                }
-            }
-            return updates;
-        }
-
-        function parseStopTimeUpdate(bytes) {
-            const buf = new Uint8Array(bytes.buffer || bytes);
-            let offset = 0;
-            const result = {};
-
-            function readVarint() {
-                let r = 0, shift = 0;
-                while (offset < buf.byteLength) {
-                    const b = buf[offset++];
-                    r |= (b & 0x7F) << shift;
-                    if ((b & 0x80) === 0) break;
-                    shift += 7;
-                }
-                return r;
-            }
-
-            function readBytes(len) {
-                const bytes = new Uint8Array(buf.buffer, buf.byteOffset + offset, len);
-                offset += len;
-                let str = '';
-                for (let i = 0; i < bytes.length; i++) {
-                    str += String.fromCharCode(bytes[i]);
-                }
-                return str;
-            }
-
-            function readField() {
-                const tag = readVarint();
-                return { fieldNumber: tag >>> 3, wireType: tag & 0x07 };
-            }
-
-            function skip(wireType) {
-                if (wireType === 0) readVarint();
-                else if (wireType === 1) offset += 8;
-                else if (wireType === 2) { const l = readVarint(); offset += l; }
-                else if (wireType === 5) offset += 4;
-            }
-
-            while (offset < buf.length) {
-                const { fieldNumber, wireType } = readField();
-                if (fieldNumber === 2 && wireType === 2) {
-                    result.stop_id = readBytes(readVarint());
-                } else if (fieldNumber === 3 && wireType === 2) {
-                    const len = readVarint();
-                    result.arrival = parseArrival(new Uint8Array(buf.buffer, buf.byteOffset + offset, len));
-                    offset += len;
-                } else {
-                    skip(wireType);
-                }
-            }
-            return result;
-        }
-
-        function parseArrival(bytes) {
-            const buf = new Uint8Array(bytes.buffer || bytes);
-            let offset = 0;
-            const result = {};
-
-            function readVarint() {
-                let r = 0, shift = 0;
-                while (offset < buf.byteLength) {
-                    const b = buf[offset++];
-                    r |= (b & 0x7F) << shift;
-                    if ((b & 0x80) === 0) break;
-                    shift += 7;
-                }
-                return r;
-            }
-
-            function readField() {
-                const tag = readVarint();
-                return { fieldNumber: tag >>> 3, wireType: tag & 0x07 };
-            }
-
-            function skip(wireType) {
-                if (wireType === 0) readVarint();
-                else if (wireType === 1) offset += 8;
-                else if (wireType === 2) { const l = readVarint(); offset += l; }
-                else if (wireType === 5) offset += 4;
-            }
-
-            while (offset < buf.length) {
-                const { fieldNumber, wireType } = readField();
-                if (fieldNumber === 1 && wireType === 0) {
-                    result.time = readVarint();
-                } else if (fieldNumber === 2 && wireType === 0) {
-                    result.delay = readVarint();
-                } else {
-                    skip(wireType);
-                }
-            }
-            return result;
-        }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
+        function matches(route, trip, vehicle, stop, q) {
+            return route.toLowerCase().includes(q) ||
+                   trip.toLowerCase().includes(q) ||
+                   vehicle.toLowerCase().includes(q) ||
+                   stop.toLowerCase().includes(q);
         }
     </script>
 </body>
