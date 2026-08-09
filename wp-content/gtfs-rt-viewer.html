@@ -109,11 +109,13 @@
                 const route = trip.routeId || '-';
                 const tripId = trip.tripId || '-';
                 const vehicleId = vehicle.id || '-';
+                const vehicleLabel = vehicle.label || '';
+                const licensePlate = vehicle.licensePlate || '';
 
                 const updates = ent.tripUpdate.stopTimeUpdate || [];
                 if (updates.length === 0) {
                     if (q && !matches(route, tripId, vehicleId, '-', q)) continue;
-                    rows += `<tr><td>${tripId}</td><td>${route}</td><td>-</td><td>-</td><td>${vehicleId}</td><td>${ts}</td></tr>`;
+                    rows += `<tr><td>${tripId}</td><td>${route}</td><td>-</td><td>-</td><td>${vehicleId} ${vehicleLabel} ${licensePlate}</td><td>${ts}</td></tr>`;
                 } else {
                     for (const u of updates) {
                         const arrival = u.arrival || {};
@@ -121,7 +123,7 @@
                         const time = arrival.time ? new Date(arrival.time * 1000).toISOString() : '-';
                         const stopId = u.stopId || '-';
                         if (q && !matches(route, tripId, vehicleId, stopId, q)) continue;
-                        rows += `<tr><td>${tripId}</td><td>${route}</td><td>${stopId}</td><td>${time} (${delay})</td><td>${vehicleId}</td><td>${ts}</td></tr>`;
+                        rows += `<tr><td>${tripId}</td><td>${route}</td><td>${stopId}</td><td>${time} (${delay})</td><td>${vehicleId} ${vehicleLabel} ${licensePlate}</td><td>${ts}</td></tr>`;
                     }
                 }
             }
