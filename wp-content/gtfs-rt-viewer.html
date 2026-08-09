@@ -11,6 +11,8 @@
         select, button, input { padding: 8px 12px; margin: 4px; border: 1px solid #ccc; border-radius: 4px; }
         button { background: #0073aa; color: white; border: none; cursor: pointer; }
         button:hover { background: #005a87; }
+        .toscana-btn { background: #e67e22; }
+        .toscana-btn:hover { background: #d35400; }
         table { border-collapse: collapse; width: 100%; margin-top: 20px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
         th { background: #f0f0f0; font-weight: 600; }
@@ -21,13 +23,23 @@
         .filter-row { margin-top: 10px; }
         .filter-row input { width: 300px; }
         .raw-preview { background: #f8f9fa; border: 1px solid #ddd; padding: 10px; margin-top: 10px; border-radius: 4px; font-family: monospace; white-space: pre-wrap; word-break: break-all; max-height: 400px; overflow-y: auto; }
+        .file-label { display: inline-block; padding: 8px 12px; background: #6c757d; color: white; border-radius: 4px; cursor: pointer; margin: 4px; }
+        .file-label:hover { background: #5a6268; }
+        input[type="file"] { display: none; }
+        
+        /* Operator backgrounds */
+        body.feed-toscana { background: linear-gradient(135deg, #e67e22 0%, #f39c12 100%); }
+        body.feed-atac_roma { background: linear-gradient(135deg, #c0392b 0%, #e74c3c 100%); }
+        body.feed-actv_veneto { background: linear-gradient(135deg, #2980b9 0%, #3498db 100%); }
+        body.feed-busitalia_veneto { background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%); }
+        body.feed-busitalia_tram { background: linear-gradient(135deg, #8e44ad 0%, #9b59b6 100%); }
     </style>
 </head>
 <body>
     <h1>GTFS-RT TripUpdates Viewer</h1>
     <div class="controls">
         <label>Feed:
-            <select id="feed">
+            <select id="feed" onchange="updateBackground()">
                 <option value="toscana">Regione Toscana</option>
                 <option value="atac_roma">ATAC Roma</option>
                 <option value="actv_veneto">ACTV Veneto</option>
@@ -36,19 +48,69 @@
             </select>
         </label>
         <button onclick="loadFeed()">Load</button>
+        <button class="toscana-btn" onclick="loadToscana()">Autolinee Toscane</button>
+        <label class="file-label">
+            Carica routes.txt
+            <input type="file" id="routesFile" accept=".txt,.csv" onchange="loadRoutes(this)" />
+        </label>
         <div class="filter-row">
-            <input type="text" id="filter" placeholder="Filter: route, trip, vehicle id, matricola, targa, stop..." />
-            <button onclick="applyFilter()">Filter</button>
-            <button onclick="clearFilter()">Clear</button>
+            <input type="text" id="filter" placeholder="Filtra: route, linea, targa, fermata..." />
+            <button onclick="applyFilter()">Filtra</button>
+            <button onclick="clearFilter()">Cancella</button>
         </div>
         <div id="status"></div>
     </div>
     <div id="result"></div>
 
     <script>
+        updateBackground();
         const PROXY_BASE = 'https://italy-version-of-wiener.onrender.com/proxy.php?feed=';
         let lastEntities = [];
         let root = null;
+        let routeMap = {}; // route_id -> route_short_name
+        let agencyMap = {}; // agency_id -> agency_name
+
+        function updateBackground() {
+            const feed = document.getElementById('feed').value;
+            document.body.className = 'feed-' + feed;
+        }
+
+        async function loadToscana() {
+            document.getElementById('feed').value = 'toscana';
+            updateBackground();
+            await loadFeed();
+        }
+
+        function loadRoutes(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                const lines = text.split('\n');
+                const header = lines[0].split(',');
+                const routeIdIdx = header.indexOf('route_id');
+                const routeShortNameIdx = header.indexOf('route_short_name');
+                const agencyIdIdx = header.indexOf('agency_id');
+                
+                routeMap = {};
+                agencyMap = {};
+                
+                for (let i = 1; i < lines.length; i++) {
+                    const cols = lines[i].split(',');
+                    if (cols.length > Math.max(routeIdIdx, routeShortNameIdx)) {
+                        const rid = cols[routeIdIdx]?.trim();
+                        const rsn = cols[routeShortNameIdx]?.trim();
+                        const aid = cols[agencyIdIdx]?.trim();
+                        if (rid && rsn) routeMap[rid] = rsn;
+                        if (aid && !agencyMap[aid]) agencyMap[aid] = aid;
+                    }
+                }
+                document.getElementById('status').innerHTML = '<div class="status ok">routes.txt caricato: ' + Object.keys(routeMap).length + ' linee</div>';
+                if (lastEntities.length > 0) renderTable(lastEntities, document.getElementById('filter').value);
+            };
+            reader.readAsText(file);
+        }
 
         async function loadProto() {
             if (root) return root;
@@ -116,17 +178,17 @@
                 const trip = ent.tripUpdate.trip || {};
                 const vehicle = ent.tripUpdate.vehicle || {};
                 const ts = ent.tripUpdate.timestamp || '';
-                const route = trip.routeId || '-';
+                const routeId = trip.routeId || '-';
+                const routeShortName = routeMap[routeId] || routeId;
                 const tripId = trip.tripId || '-';
-                const vehicleId = vehicle.id || '-';
                 const vehicleLabel = vehicle.label || '';
                 const licensePlate = vehicle.licensePlate || '';
 
                 const updates = ent.tripUpdate.stopTimeUpdate || [];
                 if (updates.length === 0) {
-                    const key = vehicleId || tripId;
+                    const key = tripId;
                     if (!byVehicle.has(key)) {
-                        byVehicle.set(key, { route, tripId, vehicleId, vehicleLabel, licensePlate, stopId: '-', time: '-', delay: '-', ts });
+                        byVehicle.set(key, { routeId, routeShortName, tripId, vehicleLabel, licensePlate, stopId: '-', time: '-', delay: '-', ts });
                     }
                     continue;
                 }
@@ -143,14 +205,14 @@
                     }
                 }
 
-                const key = vehicleId || tripId;
+                const key = tripId;
                 const existing = byVehicle.get(key);
                 const stopId = best ? best.stopId : (updates[0] && updates[0].stopId || '-');
                 const time = best ? new Date(best.time * 1000).toISOString() : '-';
                 const delay = best ? (best.delay !== undefined ? best.delay + 's' : '-') : '-';
 
                 if (!existing) {
-                    byVehicle.set(key, { route, tripId, vehicleId, vehicleLabel, licensePlate, stopId, time, delay, ts });
+                    byVehicle.set(key, { routeId, routeShortName, tripId, vehicleLabel, licensePlate, stopId, time, delay, ts });
                 } else {
                     // Keep the earliest upcoming stop
                     if (best && (existing.time === '-' || best.time < new Date(existing.time).getTime() / 1000)) {
@@ -163,24 +225,24 @@
 
             if (q) {
                 for (const [key, row] of byVehicle) {
-                    if (!matches(row.route, row.tripId, row.vehicleId, row.vehicleLabel, row.licensePlate, row.stopId, q)) {
+                    if (!matches(row.routeId, row.routeShortName, row.tripId, row.vehicleLabel, row.licensePlate, row.stopId, q)) {
                         byVehicle.delete(key);
                     }
                 }
             }
 
-            let rows = '<table><tr><th>Trip ID</th><th>Route</th><th>Stop ID</th><th>Arrival (delay)</th><th>Vehicle ID</th><th>Matricola</th><th>Targa</th><th>Timestamp</th></tr>';
+            let rows = '<table><tr><th>Trip ID</th><th>Route ID</th><th>Linea</th><th>Stop ID</th><th>Arrival (delay)</th><th>Matricola</th><th>Targa</th><th>Timestamp</th></tr>';
             for (const [key, row] of byVehicle) {
-                rows += `<tr><td>${row.tripId}</td><td>${row.route}</td><td>${row.stopId}</td><td>${row.time} (${row.delay})</td><td>${row.vehicleId}</td><td>${row.vehicleLabel}</td><td>${row.licensePlate}</td><td>${row.ts}</td></tr>`;
+                rows += `<tr><td>${row.tripId}</td><td>${row.routeId}</td><td>${row.routeShortName}</td><td>${row.stopId}</td><td>${row.time} (${row.delay})</td><td>${row.vehicleLabel}</td><td>${row.licensePlate}</td><td>${row.ts}</td></tr>`;
             }
             rows += '</table>';
             resultEl.innerHTML = rows;
         }
 
-        function matches(route, trip, vehicleId, vehicleLabel, licensePlate, stop, q) {
-            return route.toLowerCase().includes(q) ||
+        function matches(routeId, routeShortName, trip, vehicleLabel, licensePlate, stop, q) {
+            return (routeId || '').toLowerCase().includes(q) ||
+                   (routeShortName || '').toLowerCase().includes(q) ||
                    trip.toLowerCase().includes(q) ||
-                   (vehicleId || '').toLowerCase().includes(q) ||
                    (vehicleLabel || '').toLowerCase().includes(q) ||
                    (licensePlate || '').toLowerCase().includes(q) ||
                    stop.toLowerCase().includes(q);
