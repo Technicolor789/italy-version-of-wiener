@@ -33,6 +33,17 @@
         body.feed-actv_veneto { background: linear-gradient(135deg, #2980b9 0%, #3498db 100%); }
         body.feed-busitalia_veneto { background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%); }
         body.feed-busitalia_tram { background: linear-gradient(135deg, #8e44ad 0%, #9b59b6 100%); }
+        
+        /* Radio player */
+        .radio-section { background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .radio-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+        .radio-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f8f9fa; border-radius: 6px; border: 2px solid transparent; cursor: pointer; transition: all 0.2s; }
+        .radio-item:hover { border-color: #0073aa; }
+        .radio-item.active { border-color: #0073aa; background: #e6f2ff; }
+        .radio-logo { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; font-size: 12px; text-align: center; }
+        .radio-name { font-size: 13px; font-weight: 600; }
+        .radio-url { display: none; }
+        audio { width: 100%; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -60,6 +71,56 @@
         </div>
         <div id="status"></div>
     </div>
+    
+    <div class="radio-section">
+        <h3>Radio</h3>
+        <div class="radio-grid">
+            <div class="radio-item" onclick="playRadio(this, 'https://kk.fluidstream.eu/kk_history.mp3', 'KK History', '#e74c3c')">
+                <div class="radio-logo" style="background:#e74c3c;">KK</div>
+                <div>
+                    <div class="radio-name">Radio 1</div>
+                    <div style="font-size:11px;color:#666;">Kiss Kiss History</div>
+                </div>
+            </div>
+            <div class="radio-item" onclick="playRadio(this, 'https://kk.fluidstream.eu/kk_discoparty.mp3', 'KK Disco Party', '#e67e22')">
+                <div class="radio-logo" style="background:#e67e22;">KK</div>
+                <div>
+                    <div class="radio-name">Radio 2</div>
+                    <div style="font-size:11px;color:#666;">Kiss Kiss Disco Party</div>
+                </div>
+            </div>
+            <div class="radio-item" onclick="playRadio(this, 'https://kk.fluidstream.eu/kk_sanvalentino.mp3', 'KK San Valentino', '#e91e63')">
+                <div class="radio-logo" style="background:#e91e63;">KK</div>
+                <div>
+                    <div class="radio-name">Radio 3</div>
+                    <div style="font-size:11px;color:#666;">Kiss Kiss San Valentino</div>
+                </div>
+            </div>
+            <div class="radio-item" onclick="playRadio(this, 'https://ice04.fluidstream.net/ria60_bo.mp3', 'RIA60 Toscana', '#2980b9')">
+                <div class="radio-logo" style="background:#2980b9;">RIA</div>
+                <div>
+                    <div class="radio-name">Radio 4</div>
+                    <div style="font-size:11px;color:#666;">Radio Italia Anni 60 Toscana</div>
+                </div>
+            </div>
+            <div class="radio-item" onclick="playRadio(this, 'https://ice04.fluidstream.net/ria60_mi.mp3', 'RIA60 Milano', '#3498db')">
+                <div class="radio-logo" style="background:#3498db;">RIA</div>
+                <div>
+                    <div class="radio-name">Radio 5</div>
+                    <div style="font-size:11px;color:#666;">Radio Italia Anni 60 Milano</div>
+                </div>
+            </div>
+            <div class="radio-item" onclick="playRadio(this, 'https://stream.rtl.lu/data/live/radio/rtlgold/playlist.m3u8', 'RTL Play Luxembourg', '#f39c12')">
+                <div class="radio-logo" style="background:#f39c12;">RTL</div>
+                <div>
+                    <div class="radio-name">Radio 6</div>
+                    <div style="font-size:11px;color:#666;">RTL Play Luxembourg</div>
+                </div>
+            </div>
+        </div>
+        <audio id="radioPlayer" controls style="display:none;"></audio>
+    </div>
+
     <div id="result"></div>
 
     <script>
@@ -112,6 +173,15 @@
             reader.readAsText(file);
         }
 
+        function playRadio(el, url, name, color) {
+            document.querySelectorAll('.radio-item').forEach(item => item.classList.remove('active'));
+            el.classList.add('active');
+            const player = document.getElementById('radioPlayer');
+            player.src = url;
+            player.style.display = 'block';
+            player.play().catch(e => console.log('Play failed:', e));
+        }
+
         async function loadProto() {
             if (root) return root;
             const resp = await fetch('https://raw.githubusercontent.com/google/transit/master/gtfs-realtime/proto/gtfs-realtime.proto');
@@ -120,7 +190,7 @@
             return root;
         }
 
-        async function loadFeed() {
+        async         function loadFeed() {
             const feed = document.getElementById('feed').value;
             const statusEl = document.getElementById('status');
             const resultEl = document.getElementById('result');
@@ -137,14 +207,6 @@
                 const FeedMessage = (await loadProto()).lookupType('transit_realtime.FeedMessage');
                 const message = FeedMessage.decode(new Uint8Array(buffer));
                 lastEntities = message.entity || [];
-
-                // Show raw JSON for first entity to debug structure
-                if (lastEntities.length > 0 && feed === 'toscana') {
-                    const debugEl = document.createElement('pre');
-                    debugEl.className = 'raw-preview';
-                    debugEl.textContent = JSON.stringify(lastEntities[0], null, 2);
-                    resultEl.appendChild(debugEl);
-                }
 
                 renderTable(lastEntities, document.getElementById('filter').value);
             } catch (e) {
