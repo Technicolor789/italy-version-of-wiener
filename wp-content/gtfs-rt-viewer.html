@@ -121,13 +121,14 @@
                 const vehicleId = vehicle.id || '-';
                 const vehicleLabel = vehicle.label || '';
                 const licensePlate = vehicle.licensePlate || '';
+                const licensePlateDisplay = [vehicleLabel, licensePlate].filter(Boolean).join(' ') || '-';
                 const vehicleDisplay = [vehicleId, vehicleLabel, licensePlate].filter(Boolean).join(' ') || '-';
 
                 const updates = ent.tripUpdate.stopTimeUpdate || [];
                 if (updates.length === 0) {
                     const key = vehicleId || tripId;
                     if (!byVehicle.has(key)) {
-                        byVehicle.set(key, { route, tripId, vehicleId, vehicleLabel, licensePlate, stopId: '-', time: '-', delay: '-', ts });
+                        byVehicle.set(key, { route, tripId, vehicleId, vehicleLabel, licensePlate: licensePlateDisplay, stopId: '-', time: '-', delay: '-', ts });
                     }
                     continue;
                 }
@@ -151,7 +152,7 @@
                 const delay = best ? (best.delay !== undefined ? best.delay + 's' : '-') : '-';
 
                 if (!existing) {
-                    byVehicle.set(key, { route, tripId, vehicleId, vehicleLabel, licensePlate, stopId, time, delay, ts });
+                    byVehicle.set(key, { route, tripId, vehicleId, vehicleLabel, licensePlate: licensePlateDisplay, stopId, time, delay, ts });
                 } else {
                     // Keep the earliest upcoming stop
                     if (best && (existing.time === '-' || best.time < new Date(existing.time).getTime() / 1000)) {
