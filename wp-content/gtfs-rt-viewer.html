@@ -76,6 +76,14 @@
                 const message = FeedMessage.decode(new Uint8Array(buffer));
                 lastEntities = message.entity || [];
 
+                // Show raw JSON for first entity to debug structure
+                if (lastEntities.length > 0 && feed === 'toscana') {
+                    const debugEl = document.createElement('pre');
+                    debugEl.className = 'raw-preview';
+                    debugEl.textContent = JSON.stringify(lastEntities[0], null, 2);
+                    resultEl.appendChild(debugEl);
+                }
+
                 renderTable(lastEntities, document.getElementById('filter').value);
             } catch (e) {
                 statusEl.innerHTML = '<div class="status error">Error: ' + e.message + '</div>';
