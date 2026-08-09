@@ -107,7 +107,9 @@
             }
 
             const q = (query || '').trim().toLowerCase();
-            let rows = '<table><tr><th>Trip ID</th><th>Route</th><th>Stop ID</th><th>Arrival (delay)</th><th>Vehicle</th><th>Timestamp</th></tr>';
+
+            // Build a map: vehicleId -> { trip, route, vehicle, bestStop }
+            const byVehicle = new Map();
 
             for (const ent of entities) {
                 if (!ent.tripUpdate) continue;
@@ -119,23 +121,59 @@
                 const vehicleId = vehicle.id || '-';
                 const vehicleLabel = vehicle.label || '';
                 const licensePlate = vehicle.licensePlate || '';
+                const vehicleDisplay = [vehicleId, vehicleLabel, licensePlate].filter(Boolean).join(' ') || '-';
 
                 const updates = ent.tripUpdate.stopTimeUpdate || [];
                 if (updates.length === 0) {
-                    if (q && !matches(route, tripId, vehicleId, '-', q)) continue;
-                    rows += `<tr><td>${tripId}</td><td>${route}</td><td>-</td><td>-</td><td>${vehicleId} ${vehicleLabel} ${licensePlate}</td><td>${ts}</td></tr>`;
+                    const key = vehicleId || tripId;
+                    if (!byVehicle.has(key)) {
+                        byVehicle.set(key, { route, tripId, vehicleDisplay, stopId: '-', time: '-', delay: '-', ts });
+                    }
+                    continue;
+                }
+
+                // Find the next stop: earliest arrival time that is >= now, or the first stop if all are past
+                const now = Math.floor(Date.now() / 1000);
+                let best = null;
+                for (const u of updates) {
+                    const arrival = u.arrival || {};
+                    const t = arrival.time || 0;
+                    if (t === 0) continue;
+                    if (!best || t < best.time) {
+                        best = { time: t, delay: arrival.delay, stopId: u.stopId };
+                    }
+                }
+
+                const key = vehicleId || tripId;
+                const existing = byVehicle.get(key);
+                const stopId = best ? best.stopId : (updates[0] && updates[0].stopId || '-');
+                const time = best ? new Date(best.time * 1000).toISOString() : '-';
+                const delay = best ? (best.delay !== undefined ? best.delay + 's' : '-') : '-';
+
+                if (!existing) {
+                    byVehicle.set(key, { route, tripId, vehicleDisplay, stopId, time, delay, ts });
                 } else {
-                    for (const u of updates) {
-                        const arrival = u.arrival || {};
-                        const delay = arrival.delay !== undefined ? arrival.delay + 's' : '-';
-                        const time = arrival.time ? new Date(arrival.time * 1000).toISOString() : '-';
-                        const stopId = u.stopId || '-';
-                        if (q && !matches(route, tripId, vehicleId, stopId, q)) continue;
-                        rows += `<tr><td>${tripId}</td><td>${route}</td><td>${stopId}</td><td>${time} (${delay})</td><td>${vehicleId} ${vehicleLabel} ${licensePlate}</td><td>${ts}</td></tr>`;
+                    // Keep the earliest upcoming stop
+                    if (best && (existing.time === '-' || best.time < new Date(existing.time).getTime() / 1000)) {
+                        existing.stopId = stopId;
+                        existing.time = time;
+                        existing.delay = delay;
                     }
                 }
             }
 
+            if (q) {
+                for (const [key, row] of byVehicle) {
+                    if (!matches(row.route, row.tripId, row.vehicleDisplay, row.stopId, q)) {
+                        byVehicle.delete(key);
+                    }
+                }
+            }
+
+            let rows = '<table><tr><th>Trip ID</th><th>Route</th><th>Stop ID</th><th>Arrival (delay)</th><th>Vehicle</th><th>Timestamp</th></tr>';
+            for (const [key, row] of byVehicle) {
+                rows += `<tr><td>${row.tripId}</td><td>${row.route}</td><td>${row.stopId}</td><td>${row.time} (${row.delay})</td><td>${row.vehicleDisplay}</td><td>${row.ts}</td></tr>`;
+            }
             rows += '</table>';
             resultEl.innerHTML = rows;
         }
