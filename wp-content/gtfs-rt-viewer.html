@@ -27,6 +27,21 @@
         .file-label:hover { background: #5a6268; }
         input[type="file"] { display: none; }
         
+        /* LED display */
+        .led-display {
+            background-color: #000;
+            color: #fff;
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+            font-size: 13px;
+            padding: 3px 8px;
+            border: 1px solid #333;
+            border-radius: 3px;
+            text-shadow: 0 0 4px rgba(255, 255, 255, 0.6);
+            letter-spacing: 1px;
+            display: inline-block;
+        }
+        
         /* Operator backgrounds */
         body.feed-toscana { background: linear-gradient(135deg, #e67e22 0%, #f39c12 100%); }
         body.feed-atac_roma { background: linear-gradient(135deg, #c0392b 0%, #e74c3c 100%); }
@@ -130,6 +145,7 @@
         let root = null;
         let routeMap = {}; // route_id -> route_short_name
         let agencyMap = {}; // agency_id -> agency_name
+        let currentSort = { field: '', dir: '' }; // sort state
 
         function updateBackground() {
             const feed = document.getElementById('feed').value;
@@ -223,11 +239,35 @@
             renderTable(lastEntities, '');
         }
 
+        function sortBy(field) {
+            if (currentSort.field === field && currentSort.dir === 'asc') {
+                currentSort.dir = 'desc';
+            } else {
+                currentSort.field = field;
+                currentSort.dir = 'asc';
+            }
+            renderTable(lastEntities, document.getElementById('filter').value);
+        }
+
         function renderTable(entities, query) {
             const resultEl = document.getElementById('result');
             if (!entities.length) {
                 resultEl.innerHTML = '<p>No entities found in feed.</p>';
                 return;
+            }
+
+            // Apply sorting
+            if (currentSort.field) {
+                entities = [...entities].sort((a, b) => {
+                    let va = '', vb = '';
+                    if (currentSort.field === 'matricola') {
+                        va = (a.tripUpdate?.vehicle?.label || '').toLowerCase();
+                        vb = (b.tripUpdate?.vehicle?.label || '').toLowerCase();
+                    }
+                    if (va < vb) return currentSort.dir === 'asc' ? -1 : 1;
+                    if (va > vb) return currentSort.dir === 'asc' ? 1 : -1;
+                    return 0;
+                });
             }
 
             const q = (query || '').trim().toLowerCase();
@@ -293,9 +333,9 @@
                 }
             }
 
-            let rows = '<table><tr><th>Trip ID</th><th>Route ID</th><th>Linea</th><th>Stop ID</th><th>Arrival (delay)</th><th>Matricola</th><th>Targa</th><th>Timestamp</th></tr>';
+            let rows = '<table><tr><th>Trip ID</th><th>Route ID</th><th>Linea</th><th>Stop ID</th><th>Arrival (delay)</th><th>Matricola <select onchange="sortBy(\'matricola\')" style="font-size:11px;margin-left:4px;padding:2px;"><option value="">↕</option><option value="asc">↑ A-Z</option><option value="desc">↓ Z-A</option></select></th><th>Targa</th><th>Timestamp</th></tr>';
             for (const [key, row] of byVehicle) {
-                rows += `<tr><td>${row.tripId}</td><td>${row.routeId}</td><td>${row.routeShortName}</td><td>${row.stopId}</td><td>${row.time} (${row.delay})</td><td>${row.vehicleLabel}</td><td>${row.licensePlate}</td><td>${row.ts}</td></tr>`;
+                rows += `<tr><td>${row.tripId}</td><td>${row.routeId}</td><td><span class="led-display">${row.routeShortName}</span></td><td>${row.stopId}</td><td>${row.time} (${row.delay})</td><td>${row.vehicleLabel}</td><td>${row.licensePlate}</td><td>${row.ts}</td></tr>`;
             }
             rows += '</table>';
             resultEl.innerHTML = rows;
