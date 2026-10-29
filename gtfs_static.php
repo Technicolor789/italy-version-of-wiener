@@ -8,10 +8,11 @@
 // CLI: php gtfs_static.php build trenord   (re)builds the database
 //      php gtfs_static.php build trenord /path/to/gtfs.zip
 
-// feed => URL of the GTFS zip ('' = only the zip in gtfs/<feed>.zip, no refresh)
+// feed => URL of the GTFS zip, or "ckan:<portal>|<dataset>" to take the
+// newest zip of a CKAN open data dataset ('' = only gtfs/<feed>.zip).
 const GTFS_STATIC_FEEDS = [
     'trenord' => 'https://www.dati.lombardia.it/download/3z4k-mxz9/application%2Fzip',
-    'atm' => '',
+    'atm' => 'ckan:https://dati.comune.milano.it|ds929-orari-del-trasporto-pubblico-locale-nel-comune-di-milano-in-formato-gtfs',
 ];
 const GTFS_STATIC_MAX_AGE = 7 * 86400;
 const GTFS_STATIC_TZ = 'Europe/Rome';
@@ -48,6 +49,9 @@ function gtfs_static_open(string $feed): PDO
         $target = gtfs_static_paths($feed)[0];
         $lock = fopen("$target.lock", 'c');
         if ($lock && flock($lock, LOCK_EX | LOCK_NB)) {
+            // Importing ATM takes a while: finish even if this client gives up.
+            ignore_user_abort(true);
+            set_time_limit(0);
             try {
                 gtfs_static_build($feed, GTFS_STATIC_FEEDS[$feed], $target);
                 $db = $target;
@@ -114,8 +118,53 @@ function gtfs_static_rows(ZipArchive $zip, string $name, callable $fn, bool $req
     fclose($fh);
 }
 
+// Newest zip resource of a CKAN package_show result, or null.
+function gtfs_static_pick_resource(array $package): ?string
+{
+    $best = null;
+    $best_date = '';
+    foreach ($package['result']['resources'] ?? [] as $res) {
+        $url = $res['url'] ?? '';
+        $format = strtolower($res['format'] ?? '');
+        if ($url === '' || ($format !== 'zip' && !preg_match('/\.zip($|\?)/i', $url))) {
+            continue;
+        }
+        $date = $res['last_modified'] ?? $res['metadata_modified'] ?? $res['created'] ?? '';
+        if ($best === null || strcmp((string)$date, $best_date) >= 0) {
+            $best = $url;
+            $best_date = (string)$date;
+        }
+    }
+    return $best;
+}
+
+function gtfs_static_resolve(string $source): string
+{
+    if (!str_starts_with($source, 'ckan:')) {
+        return $source;
+    }
+    [$portal, $dataset] = explode('|', substr($source, 5), 2);
+    $api = rtrim($portal, '/') . '/api/3/action/package_show?id=' . urlencode($dataset);
+    $ch = curl_init($api);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_CONNECTTIMEOUT => 20,
+        CURLOPT_TIMEOUT => 60,
+        CURLOPT_USERAGENT => 'GTFS-RT-Proxy/1.0',
+    ]);
+    $json = curl_exec($ch);
+    curl_close($ch);
+    $url = $json ? gtfs_static_pick_resource(json_decode($json, true) ?: []) : null;
+    if (!$url) {
+        throw new RuntimeException("Nessuno zip trovato nel dataset $dataset");
+    }
+    return $url;
+}
+
 function gtfs_static_build(string $feed, string $source, string $target): void
 {
+    $source = gtfs_static_resolve($source);
     $zip_path = $source;
     if (preg_match('#^https?://#', $source)) {
         $zip_path = tempnam(sys_get_temp_dir(), "gtfs_$feed");

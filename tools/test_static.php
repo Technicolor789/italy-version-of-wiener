@@ -37,6 +37,15 @@ if ($found !== ['S_MI', 'S_MI_1']) {
     echo "FAIL search: " . implode(',', $found) . "\n";
     $fail++;
 }
+$package = ['result' => ['resources' => [
+    ['url' => 'https://x/old.zip', 'format' => 'ZIP', 'last_modified' => '2026-09-01T10:00:00'],
+    ['url' => 'https://x/readme.pdf', 'format' => 'PDF', 'last_modified' => '2026-11-01T10:00:00'],
+    ['url' => 'https://x/new.zip', 'format' => 'zip', 'last_modified' => '2026-10-16T10:00:00'],
+]]];
+if (gtfs_static_pick_resource($package) !== 'https://x/new.zip') {
+    echo "FAIL ckan resource: " . gtfs_static_pick_resource($package) . "\n";
+    $fail++;
+}
 file_put_contents($argv[2], gtfs_static_feed(gtfs_static_departures($db, ['S_MI'], strtotime('2026-12-01 08:35')), 1796110500));
 unlink($db_path);
 echo $fail ? "FAILED\n" : "PASSED\n";
