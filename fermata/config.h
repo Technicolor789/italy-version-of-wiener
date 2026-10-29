@@ -62,6 +62,7 @@ static const FeedInfo kFeeds[] = {
   // static GTFS published by Regione Lombardia (needs the proxy URL).
   {"trenord", "Lombardia", "Trenord (orari)", "", false, true},
   {"atm", "Lombardia", "ATM Milano (orari)", "", false, true},
+  {"gest", "Toscana", "Tramvia Firenze (orari)", "", false, true},
   {"toscana", "Toscana", "Autolinee Toscane",
    "https://regionetoscana.smartregion.toscana.it/mobility/artifacts/gtfs-rt/trip-updates", false, false},
   {"actv_veneto", "Veneto", "ACTV Venezia",

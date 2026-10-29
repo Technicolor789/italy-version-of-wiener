@@ -12,12 +12,13 @@ COPY . /var/www/html/
 # gtfs/<feed>.zip from the repo is used when present; Trenord can also be
 # downloaded, and the proxy refreshes it by itself every week.
 RUN cd /var/www/html && mkdir -p data \
- && for feed in trenord atm; do \
+ && for feed in trenord atm gest; do \
       if [ -f gtfs/$feed.zip ]; then php gtfs_static.php build $feed gtfs/$feed.zip; \
       else php gtfs_static.php build $feed; fi || echo "$feed timetable not built now"; \
     done \
- && for feed in toscana; do \
-      [ -d gtfs/$feed ] && php gtfs_names.php build $feed gtfs/$feed || echo "$feed names not built"; \
+ && for feed in toscana actv_veneto; do \
+      src=gtfs/$feed; [ -f gtfs/$feed.zip ] && src=gtfs/$feed.zip; \
+      [ -e $src ] && php gtfs_names.php build $feed $src || echo "$feed names not built"; \
     done \
  && rm -rf gtfs \
  && chown -R www-data:www-data data

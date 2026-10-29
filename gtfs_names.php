@@ -160,6 +160,22 @@ function gtfs_names_search(PDO $db, string $text, int $limit = 25): array
 if (PHP_SAPI === 'cli' && realpath($argv[0] ?? '') === __FILE__ && ($argv[1] ?? '') === 'build') {
     @mkdir(__DIR__ . '/data');
     $t = microtime(true);
-    gtfs_names_build($argv[3], gtfs_names_path($argv[2]));
+    $dir = $argv[3];
+    if (is_file($dir)) {  // a GTFS zip: only the three tables are needed
+        $zip = new ZipArchive();
+        if ($zip->open($dir) !== true) {
+            fwrite(STDERR, "Cannot open $dir\n");
+            exit(1);
+        }
+        $dir = sys_get_temp_dir() . '/names_' . getmypid();
+        @mkdir($dir);
+        foreach (['routes.txt', 'trips.txt', 'stops.txt'] as $name) {
+            $idx = $zip->locateName($name, ZipArchive::FL_NODIR | ZipArchive::FL_NOCASE);
+            if ($idx !== false) {
+                file_put_contents("$dir/$name", $zip->getFromIndex($idx));
+            }
+        }
+    }
+    gtfs_names_build($dir, gtfs_names_path($argv[2]));
     printf("%s: %.1f MB in %.0f s\n", $argv[2], filesize(gtfs_names_path($argv[2])) / 1e6, microtime(true) - $t);
 }

@@ -12,6 +12,7 @@
 // newest zip of a CKAN open data dataset ('' = only gtfs/<feed>.zip).
 const GTFS_STATIC_FEEDS = [
     'trenord' => 'https://www.dati.lombardia.it/download/3z4k-mxz9/application%2Fzip',
+    'gest' => '',  // Tramvia di Firenze: gtfs/gest.zip
     'atm' => 'ckan:https://dati.comune.milano.it|ds929-orari-del-trasporto-pubblico-locale-nel-comune-di-milano-in-formato-gtfs',
 ];
 const GTFS_STATIC_MAX_AGE = 7 * 86400;
@@ -208,6 +209,8 @@ function gtfs_static_build(string $feed, string $source, string $target): void
     $ins = $db->prepare('INSERT OR REPLACE INTO routes VALUES (?, ?)');
     gtfs_static_rows($zip, 'routes.txt', function ($r) use ($ins) {
         $name = trim($r['route_short_name'] ?? '') ?: trim($r['route_long_name'] ?? '') ?: $r['route_id'];
+        // GEST calls tram line T1 "T1.3".
+        $name = preg_replace('/^(T\d+)\.\d+$/', '$1', $name);
         // Metro lines are "1", "2"... like the trams: call them M1, M2.
         if (trim($r['route_type'] ?? '') === '1' && ctype_digit($name)) {
             $name = "M$name";
