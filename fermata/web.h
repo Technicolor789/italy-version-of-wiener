@@ -41,6 +41,19 @@ class WebUi {
     return out;
   }
 
+  static String hhmm(int minutes) {
+    char buf[6];
+    snprintf(buf, sizeof(buf), "%02d:%02d", minutes / 60, minutes % 60);
+    return buf;
+  }
+
+  static int parseHhmm(const String& s, int fallback) {
+    int colon = s.indexOf(':');
+    if (colon < 1) return fallback;
+    int m = s.substring(0, colon).toInt() * 60 + s.substring(colon + 1).toInt();
+    return m >= 0 && m < 1440 ? m : fallback;
+  }
+
   String feedOptions(const String& selected) {
     String out;
     const char* region = "";
@@ -107,6 +120,13 @@ class WebUi {
     h += "<label>Messaggio</label><input name=gift_msg maxlength=90 value=\"" + esc(s_.gift_message) + "\">";
     h += "<label><input type=checkbox name=replay style='width:auto'> Mostra di nuovo la sorpresa al prossimo avvio</label>";
 
+    h += F("</section><section><h2>La sera</h2><p class=hint>Quando i suoi bus finiscono, il display pu&ograve; "
+           "passare da solo a un'altra fermata (anche a Firenze) e tornare a quella di sempre la mattina.</p>"
+           "<label>Fermata serale</label><select name=night_fav><option value=-1>Nessuna</option>");
+    for (int i = 0; i < s_.favorite_count; ++i)
+      h += "<option value=" + String(i) + (i == s_.night_fav ? " selected>" : ">") + esc(s_.favorites[i].name) + "</option>";
+    h += "</select><div class=fav><div><label>Dalle</label><input type=time name=night_from value=" + hhmm(s_.night_from) +
+         "></div><div><label>Alle</label><input type=time name=night_to value=" + hhmm(s_.night_to) + "></div></div>";
     h += F("</section><section><h2>Aspetto</h2><label>Tema</label><select name=theme>");
     for (int i = 0; i < kThemeCount; ++i)
       h += "<option value=" + String(i) + (i == s_.theme ? " selected>" : ">") + kThemes[i].name + "</option>";
@@ -159,6 +179,11 @@ class WebUi {
     }
     s_.favorite_count = n;
     if (s_.active >= n) s_.active = 0;
+    if (s_.day_active >= n) s_.day_active = 0;
+    s_.night_fav = server_.hasArg("night_fav") ? (int)server_.arg("night_fav").toInt() : -1;
+    if (s_.night_fav >= n) s_.night_fav = -1;
+    s_.night_from = parseHhmm(server_.arg("night_from"), s_.night_from);
+    s_.night_to = parseHhmm(server_.arg("night_to"), s_.night_to);
     s_.gift_name = Settings::clean(server_.arg("gift_name"));
     s_.gift_message = Settings::clean(server_.arg("gift_msg"));
     if (server_.hasArg("replay")) s_.welcomed = false;

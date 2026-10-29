@@ -23,6 +23,13 @@ struct Settings {
   Favorite favorites[MAX_FAVORITES];
   int favorite_count = 0;
   int active = 0;
+  // Evening: from night_from to night_to (minutes after midnight) the display
+  // shows favourite night_fav, then goes back to the daytime one.
+  int night_fav = -1;
+  int night_from = 21 * 60 + 30;
+  int night_to = 6 * 60;
+  bool night_override = false;  // not saved: currently showing night_fav
+  int day_active = 0;
   int theme = 0;
   int brightness = 3;  // 1..5
   bool flip = false;
@@ -36,7 +43,7 @@ struct Settings {
     gift_message = p.getString("gift_msg", GIFT_MESSAGE);
     proxy_url = p.getString("proxy", DEFAULT_PROXY_URL);
     custom_url = p.getString("custom_url", "");
-    line_names = p.getString("line_names", "");
+    line_names = p.getString("line_names", DEFAULT_LINE_NAMES);
     fleet = p.getString("fleet", "");
     for (int i = 0; i < kFeedCount; ++i) {
       feed_user[i] = p.getString(("u" + String(i)).c_str(), "");
@@ -47,6 +54,9 @@ struct Settings {
     flip = p.getBool("flip", false);
     welcomed = p.getBool("welcomed", false);
     active = p.getInt("active", 0);
+    night_fav = p.getInt("night_fav", -1);
+    night_from = constrain(p.getInt("night_from", night_from), 0, 1439);
+    night_to = constrain(p.getInt("night_to", night_to), 0, 1439);
     String favs = p.getString("favs", DEFAULT_FAVORITES);
     p.end();
     parseFavorites(favs);
@@ -71,7 +81,10 @@ struct Settings {
     p.putInt("bright", brightness);
     p.putBool("flip", flip);
     p.putBool("welcomed", welcomed);
-    p.putInt("active", active);
+    p.putInt("active", night_override ? day_active : active);
+    p.putInt("night_fav", night_fav);
+    p.putInt("night_from", night_from);
+    p.putInt("night_to", night_to);
     p.putString("favs", favoritesString());
     p.end();
   }

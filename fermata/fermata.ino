@@ -258,6 +258,34 @@ void decorate(gtfsrt::Result& r) {
   }
 }
 
+// Switches to the evening stop and back, once a minute or so.
+void checkNight() {
+  static uint32_t last = 0;
+  if (millis() - last < 10000) return;
+  last = millis();
+  bool usable = !demo && timeValid() && settings.night_fav >= 0 && settings.night_fav < settings.favorite_count;
+  bool in = false;
+  if (usable) {
+    time_t now = time(nullptr);
+    struct tm tmv;
+    localtime_r(&now, &tmv);
+    int m = tmv.tm_hour * 60 + tmv.tm_min, from = settings.night_from, to = settings.night_to;
+    in = from <= to ? (m >= from && m < to) : (m >= from || m < to);
+  }
+  if (in && !settings.night_override) {
+    settings.day_active = settings.active;
+    settings.night_override = true;
+    settings.active = settings.night_fav;
+    requestDepartures();
+    toast("Buonasera! " + settings.favorites[settings.active].name);
+  } else if (!in && settings.night_override) {
+    settings.night_override = false;
+    settings.active = settings.day_active < settings.favorite_count ? settings.day_active : 0;
+    requestDepartures();
+    toast("Buongiorno!");
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Network
 // ---------------------------------------------------------------------------
@@ -661,7 +689,10 @@ void loop() {
   bool any_short = ok == Button::kShort || next == Button::kShort;
   bool any_long = ok == Button::kLong || next == Button::kLong;
 
-  if (online) web.loop();
+  if (online) {
+    web.loop();
+    checkNight();
+  }
   if (wm.getConfigPortalActive()) wm.process();
 
   uint32_t ms = millis();

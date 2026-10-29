@@ -7,18 +7,23 @@
 // Regalo: shown on the very first boot (with confetti) and as a greeting on
 // every boot afterwards. Both can also be changed later from the web page.
 // ---------------------------------------------------------------------------
-#define GIFT_NAME ""                       // es. "Marco"
+#define GIFT_NAME "Luciano"
 #define GIFT_MESSAGE "Buon viaggio, ogni giorno!"
 
 // Optional: stops already configured when he turns it on for the first time.
 // Format: "Nome|feed|stop_id,stop_id;Nome 2|feed|stop_id"
 // Feed keys are listed in kFeeds below, es. "Termini|atac_roma|70017".
-#define DEFAULT_FAVORITES ""
+#define DEFAULT_FAVORITES \
+  "Piazza d'Azeglio|toscana|143931,144181,143602;" \
+  "Casa|toscana|145028,145462"
+
+// Autolinee Toscane route_ids are not the numbers on the bus: route_id=line.
+#define DEFAULT_LINE_NAMES "550=31, 478=30"
 
 // Optional: URL of proxy.php from this repository (es.
 // "https://mio-server.it/proxy.php"). With it the display downloads only the
 // trips of its stops instead of the whole regional feed.
-#define DEFAULT_PROXY_URL ""
+#define DEFAULT_PROXY_URL "https://italy-version-of-wiener.onrender.com/proxy.php"
 
 // ---------------------------------------------------------------------------
 // Hardware: LilyGO T-Display S3
