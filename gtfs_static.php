@@ -8,8 +8,10 @@
 // CLI: php gtfs_static.php build trenord   (re)builds the database
 //      php gtfs_static.php build trenord /path/to/gtfs.zip
 
+// feed => URL of the GTFS zip ('' = only the zip in gtfs/<feed>.zip, no refresh)
 const GTFS_STATIC_FEEDS = [
     'trenord' => 'https://www.dati.lombardia.it/download/3z4k-mxz9/application%2Fzip',
+    'atm' => '',
 ];
 const GTFS_STATIC_MAX_AGE = 7 * 86400;
 const GTFS_STATIC_TZ = 'Europe/Rome';
@@ -39,7 +41,10 @@ function gtfs_static_find(string $feed): ?string
 function gtfs_static_open(string $feed): PDO
 {
     $db = gtfs_static_find($feed);
-    if (!$db || time() - filemtime($db) > GTFS_STATIC_MAX_AGE) {
+    if (!$db && GTFS_STATIC_FEEDS[$feed] === '') {
+        throw new RuntimeException("Orari $feed non disponibili");
+    }
+    if (GTFS_STATIC_FEEDS[$feed] !== '' && (!$db || time() - filemtime($db) > GTFS_STATIC_MAX_AGE)) {
         $target = gtfs_static_paths($feed)[0];
         $lock = fopen("$target.lock", 'c');
         if ($lock && flock($lock, LOCK_EX | LOCK_NB)) {
@@ -61,6 +66,16 @@ function gtfs_static_open(string $feed): PDO
     $pdo = new PDO("sqlite:$db");
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     return $pdo;
+}
+
+// ATM writes everything in lower case: "sesto 1 maggio fs" -> "Sesto 1 Maggio Fs".
+function gtfs_static_title(string $s): string
+{
+    $s = trim($s);
+    if ($s === '' || strtolower($s) !== $s) {
+        return $s;
+    }
+    return function_exists('mb_convert_case') ? mb_convert_case($s, MB_CASE_TITLE, 'UTF-8') : ucwords($s);
 }
 
 function gtfs_static_secs(string $hms): ?int
@@ -144,15 +159,19 @@ function gtfs_static_build(string $feed, string $source, string $target): void
     $ins = $db->prepare('INSERT OR REPLACE INTO routes VALUES (?, ?)');
     gtfs_static_rows($zip, 'routes.txt', function ($r) use ($ins) {
         $name = trim($r['route_short_name'] ?? '') ?: trim($r['route_long_name'] ?? '') ?: $r['route_id'];
+        // Metro lines are "1", "2"... like the trams: call them M1, M2.
+        if (trim($r['route_type'] ?? '') === '1' && ctype_digit($name)) {
+            $name = "M$name";
+        }
         $ins->execute([$r['route_id'], $name]);
     });
     $ins = $db->prepare('INSERT OR REPLACE INTO trips VALUES (?, ?, ?, ?)');
     gtfs_static_rows($zip, 'trips.txt', function ($r) use ($ins) {
-        $ins->execute([$r['trip_id'], $r['route_id'], $r['service_id'], trim($r['trip_headsign'] ?? '')]);
+        $ins->execute([$r['trip_id'], $r['route_id'], $r['service_id'], gtfs_static_title($r['trip_headsign'] ?? '')]);
     });
     $ins = $db->prepare('INSERT OR REPLACE INTO stops VALUES (?, ?, ?)');
     gtfs_static_rows($zip, 'stops.txt', function ($r) use ($ins) {
-        $ins->execute([$r['stop_id'], trim($r['stop_name'] ?? ''), trim($r['parent_station'] ?? '')]);
+        $ins->execute([$r['stop_id'], gtfs_static_title($r['stop_name'] ?? ''), trim($r['parent_station'] ?? '')]);
     });
     $ins = $db->prepare('INSERT INTO st VALUES (?, ?, ?, ?)');
     gtfs_static_rows($zip, 'stop_times.txt', function ($r) use ($ins) {

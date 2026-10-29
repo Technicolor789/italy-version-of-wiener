@@ -106,7 +106,7 @@ Serve lo `stop_id` del GTFS statico dell'operatore:
 
 Se una fermata ha un ID per direzione, mettili entrambi separati da virgola.
 
-## Lombardia: orari Trenord (programmati)
+## Lombardia: orari Trenord e ATM (programmati)
 
 In Lombardia non ci sono feed in tempo reale aperti a tutti, ma Regione
 Lombardia pubblica il **GTFS statico** di Trenord. `proxy.php` (insieme a
@@ -119,6 +119,9 @@ scritta *orario programmato* invece di *in orario*.
   `https://<il-tuo-proxy>/proxy.php?feed=trenord&search=Milano` e copia l'`id`.
   Si può mettere anche l'ID della stazione "madre": il proxy include tutti i
   suoi binari.
+- ATM Milano funziona allo stesso modo (`feed=atm`); le linee della metro
+  compaiono come M1…M5. Il file ATM nel repo va sostituito quando ATM ne
+  pubblica uno nuovo (ogni versione ha una data di scadenza).
 - Il Dockerfile prepara gli orari durante il deploy (o usa `gtfs/trenord.zip`
   se è nel repo) e il proxy li riscarica da solo ogni settimana.
 

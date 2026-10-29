@@ -59,6 +59,7 @@ static const FeedInfo kFeeds[] = {
   // Lombardia: no open live feed; timetables built by proxy.php from the
   // static GTFS published by Regione Lombardia (needs the proxy URL).
   {"trenord", "Lombardia", "Trenord (orari)", "", false, true},
+  {"atm", "Lombardia", "ATM Milano (orari)", "", false, true},
   {"toscana", "Toscana", "Autolinee Toscane",
    "https://regionetoscana.smartregion.toscana.it/mobility/artifacts/gtfs-rt/trip-updates", false, false},
   {"actv_veneto", "Veneto", "ACTV Venezia",

@@ -1,6 +1,6 @@
 FROM php:8.3-apache
 
-# zip: to read static GTFS files (Trenord timetables)
+# zip: to read static GTFS files (Trenord and ATM timetables)
 RUN apt-get update \
  && apt-get install -y --no-install-recommends libzip-dev \
  && docker-php-ext-install zip \
@@ -8,10 +8,13 @@ RUN apt-get update \
 
 COPY . /var/www/html/
 
-# Import the Trenord timetable at build time, so the first request does not
-# wait for it. A zip committed in gtfs/trenord.zip is used if present. If the
-# download fails the proxy builds it on the first request instead.
-RUN cd /var/www/html \
- && (if [ -f gtfs/trenord.zip ]; then php gtfs_static.php build trenord gtfs/trenord.zip; \
-     else php gtfs_static.php build trenord; fi || echo "Trenord timetable not built now") \
- && mkdir -p data && chown -R www-data:www-data data
+# Import the timetables at build time, so the first request does not wait.
+# gtfs/<feed>.zip from the repo is used when present; Trenord can also be
+# downloaded, and the proxy refreshes it by itself every week.
+RUN cd /var/www/html && mkdir -p data \
+ && for feed in trenord atm; do \
+      if [ -f gtfs/$feed.zip ]; then php gtfs_static.php build $feed gtfs/$feed.zip; \
+      else php gtfs_static.php build $feed; fi || echo "$feed timetable not built now"; \
+    done \
+ && rm -rf gtfs \
+ && chown -R www-data:www-data data
