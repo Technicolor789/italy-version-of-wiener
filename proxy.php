@@ -1,4 +1,6 @@
 <?php
+require __DIR__ . '/gtfs_filter.php';
+
 // CORS must be sent before any other output
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
@@ -28,6 +30,7 @@ if (empty($feed) && isset($_SERVER['PATH_INFO'])) {
 }
 
 if (empty($feed)) {
+    http_response_code(400);
     echo json_encode([
         'error' => 'Missing feed parameter',
         'usage' => '?feed=toscana',
@@ -38,6 +41,7 @@ if (empty($feed)) {
 
 $remote_url = $FEEDS[$feed] ?? null;
 if (!$remote_url) {
+    http_response_code(404);
     echo json_encode([
         'error' => 'Unknown feed',
         'requested' => $feed,
@@ -46,23 +50,42 @@ if (!$remote_url) {
     exit;
 }
 
-$ch = curl_init($remote_url);
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_FOLLOWLOCATION => true,
-    CURLOPT_MAXREDIRS => 5,
-    CURLOPT_CONNECTTIMEOUT => 10,
-    CURLOPT_TIMEOUT => 30,
-    CURLOPT_SSL_VERIFYPEER => true,
-    CURLOPT_USERAGENT => 'GTFS-RT-Proxy/1.0',
-]);
+// Optional ?stops=ID1,ID2: return only the trips serving these stops.
+$stops = array_filter(array_map('trim', explode(',', $_GET['stops'] ?? '')), 'strlen');
 
-$body = curl_exec($ch);
-$http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$curl_error = curl_error($ch);
-curl_close($ch);
+// Several displays (or a browser and a display) share one download.
+$cache_file = sys_get_temp_dir() . '/gtfsrt_' . $feed . '.pb';
+$cache_ttl = 15;
+$body = false;
+$http_code = 200;
+$curl_error = '';
+if (is_file($cache_file) && time() - filemtime($cache_file) < $cache_ttl) {
+    $body = file_get_contents($cache_file);
+}
+
+if ($body === false) {
+    $ch = curl_init($remote_url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS => 5,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_USERAGENT => 'GTFS-RT-Proxy/1.0',
+    ]);
+
+    $body = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curl_error = curl_error($ch);
+    curl_close($ch);
+    if ($body !== false && $http_code === 200) {
+        file_put_contents($cache_file, $body, LOCK_EX);
+    }
+}
 
 if ($body === false || $http_code !== 200) {
+    http_response_code(502);
     echo json_encode([
         'error' => 'Failed to fetch feed',
         'http_code' => $http_code,
@@ -70,6 +93,16 @@ if ($body === false || $http_code !== 200) {
         'remote_url' => $remote_url
     ]);
     exit;
+}
+
+if ($stops) {
+    try {
+        $body = gtfs_filter_stops($body, $stops);
+    } catch (RuntimeException $e) {
+        http_response_code(502);
+        echo json_encode(['error' => 'Invalid feed: ' . $e->getMessage()]);
+        exit;
+    }
 }
 
 header('Content-Type: application/x-protobuf');

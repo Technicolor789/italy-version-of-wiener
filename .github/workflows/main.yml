@@ -1,37 +1,46 @@
-name: Build Arduino Sketch
+name: Build Fermata
 
 on: push
 
 jobs:
-  build:
+  firmware:
     runs-on: ubuntu-latest
-
     steps:
       - name: Check out repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
-      # We use the `arduino/setup-arduino-cli` action to install and
-      # configure the Arduino CLI on the system.
       - name: Setup Arduino CLI
-        uses: arduino/setup-arduino-cli@v1
-     # - name: Install Arduino CLI
-     #   run: |
-     #     curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=/usr/local/bin sh
-     #   shell: bash
+        uses: arduino/setup-arduino-cli@v2
 
-      - name: Install required libraries
+      - name: Install ESP32 core and libraries
         run: |
-          arduino-cli lib install "ArduinoJson"
-          arduino-cli lib install "TFT_eSPI"
-          arduino-cli lib install "WiFiManager"
-        shell: bash
-        
-      - uses: arduino/compile-sketches@v1
-        with:
-          fqbn: "esp32:esp32:tinypico"
-          platforms: |
-            - name: esp32:esp32
-              source-url: https://dl.espressif.com/dl/package_esp32_index.json
+          arduino-cli core update-index --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli core install esp32:esp32@2.0.17 --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli lib install "TFT_eSPI@2.5.43" "WiFiManager@2.0.17"
 
-          sketch-paths: |
-            - sketch
+      - name: Configure TFT_eSPI for the T-Display S3
+        run: |
+          f="$HOME/Arduino/libraries/TFT_eSPI/User_Setup_Select.h"
+          sed -i 's|^#include <User_Setup.h>|//#include <User_Setup.h>|' "$f"
+          sed -i 's|^//#include <User_Setups/Setup206_LilyGo_T_Display_S3.h>|#include <User_Setups/Setup206_LilyGo_T_Display_S3.h>|' "$f"
+          grep -n "Setup206" "$f"
+
+      - name: Compile
+        run: |
+          arduino-cli compile --fqbn esp32:esp32:lilygo_t_display_s3 --warnings default \
+            --output-dir build fermata
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: fermata-firmware
+          path: build/*.bin
+
+  parser-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install protobuf bindings
+        run: pip install gtfs-realtime-bindings
+      - name: Run tests
+        run: sh tools/test_gtfsrt.sh

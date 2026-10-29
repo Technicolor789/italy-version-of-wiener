@@ -1,3 +1,16 @@
+# 🇮🇹 Fermata – versione italiana
+
+Tabellone delle partenze in tempo reale per **LilyGO T‑Display S3**, con i feed
+GTFS‑Realtime italiani organizzati per regione (Lazio, Toscana, Veneto),
+animazione di avvio, sorpresa al primo avvio, menù a due tasti e configurazione
+dal telefono su `http://fermata.local`.
+
+➡️ Firmware e istruzioni: [`fermata/`](fermata/README.md) · Proxy facoltativo: [`proxy.php`](proxy.php)
+
+---
+
+*Progetto originale per Vienna (cartella `sketch/`):*
+
 [![Build Arduino Sketch](https://github.com/coppermilk/wiener_linien_esp32_monitor/actions/workflows/main.yml/badge.svg)](https://github.com/coppermilk/wiener_linien_esp32_monitor/actions/workflows/main.yml)
 # Wiener Linien ESP32-S3 Public Transport Departure Monitor
 
