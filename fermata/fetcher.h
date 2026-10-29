@@ -8,9 +8,27 @@
 #include "config.h"
 #include "gtfsrt.h"
 
+// "Thu, 29 Oct 2026 13:05:00 GMT" (HTTP Date header) -> unix time, 0 if invalid.
+inline time_t parseHttpDate(const String& s) {
+  char mon[4] = {0};
+  int d, y, hh, mm, ss;
+  if (sscanf(s.c_str(), "%*3s, %d %3s %d %d:%d:%d", &d, mon, &y, &hh, &mm, &ss) != 6) return 0;
+  const char* names = "JanFebMarAprMayJunJulAugSepOctNovDec";
+  const char* p = strstr(names, mon);
+  if (!p) return 0;
+  int m = (p - names) / 3 + 1;
+  // Days from civil date (Howard Hinnant's algorithm).
+  y -= m <= 2;
+  long era = y / 400, yoe = y - era * 400;
+  long doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+  long days = era * 146097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719468;
+  return (time_t)(days * 86400L + hh * 3600L + mm * 60L + ss);
+}
+
 class StreamSource : public gtfsrt::ByteSource {
  public:
-  StreamSource(WiFiClient& c, int size) : c_(c), remaining_(size) {}
+  StreamSource(WiFiClient& c, int size, volatile uint32_t* counter)
+      : c_(c), remaining_(size), counter_(counter) {}
 
   size_t read(uint8_t* buf, size_t cap) override {
     uint32_t start = millis();
@@ -22,6 +40,7 @@ class StreamSource : public gtfsrt::ByteSource {
         int got = c_.read(buf, n);
         if (got <= 0) return 0;
         if (remaining_ > 0) remaining_ -= got;
+        *counter_ += got;
         return got;
       }
       if (!c_.connected()) return 0;
@@ -40,6 +59,7 @@ class StreamSource : public gtfsrt::ByteSource {
  private:
   WiFiClient& c_;
   int remaining_;  // -1 when the size is unknown
+  volatile uint32_t* counter_;
   bool timed_out_ = false;
 };
 
@@ -94,11 +114,13 @@ class Fetcher {
     uint32_t last_ok_ms;
     uint32_t last_duration_ms;
     uint64_t last_bytes;
+    String phase;       // what the task is doing now, for the ticker
+    uint32_t progress;  // bytes of the download in progress
   };
 
   Status status() {
     lock();
-    Status s{busy_, have_data_, error_, last_ok_ms_, last_duration_ms_, last_bytes_};
+    Status s{busy_, have_data_, error_, last_ok_ms_, last_duration_ms_, last_bytes_, phase_, progress_};
     unlock();
     return s;
   }
@@ -109,10 +131,12 @@ class Fetcher {
   void run() {
     for (;;) {
       ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(REFRESH_SECONDS * 1000));
-      // Wait for WiFi and a valid clock (needed to drop past departures).
-      while (WiFi.status() != WL_CONNECTED || time(nullptr) < 1700000000) {
-        vTaskDelay(pdMS_TO_TICKS(500));
-      }
+      setPhase("Attendo il WiFi");
+      while (WiFi.status() != WL_CONNECTED) vTaskDelay(pdMS_TO_TICKS(500));
+      // The clock drops past departures. If NTP does not answer (some
+      // routers block it) go on: download() takes the time from the server.
+      setPhase("Attendo l'ora da internet");
+      for (int i = 0; i < 30 && time(nullptr) < 1700000000; ++i) vTaskDelay(pdMS_TO_TICKS(500));
       lock();
       FetchRequest r = req_;
       uint32_t gen = generation_req_;
@@ -132,8 +156,10 @@ class Fetcher {
       gtfsrt::Result* res = new gtfsrt::Result();
       String err;
       uint32_t t0 = millis();
+      progress_ = 0;
       download(r, *res, err);
       uint32_t took = millis() - t0;
+      setPhase("");
 
       lock();
       busy_ = false;
@@ -162,7 +188,7 @@ class Fetcher {
     gtfsrt::Filter filter;
     filter.setStops(r.stops.c_str());
     filter.setRoutes(r.routes.c_str());
-    filter.now = time(nullptr);
+    filter.now = time(nullptr) > 1700000000 ? time(nullptr) : 0;  // 0: keep all
 
     bool https = r.url.startsWith("https");
     WiFiClientSecure secure;
@@ -177,21 +203,39 @@ class Fetcher {
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
     http.setUserAgent("Fermata-ESP32/" FERMATA_VERSION);
     if (r.user.length()) http.setAuthorization(r.user.c_str(), r.pass.c_str());
+    setPhase("Mi collego al server");
+    const char* headers[] = {"Date"};
     if (!http.begin(client, r.url)) {
       err = "URL non valido";
       return;
     }
+    http.collectHeaders(headers, 1);
     int code = http.GET();
+    if (time(nullptr) < 1700000000) {
+      time_t server_time = parseHttpDate(http.header("Date"));
+      if (server_time > 1700000000) {
+        struct timeval tv = {server_time, 0};
+        settimeofday(&tv, nullptr);
+        Serial.println("[fetch] ora presa dal server");
+      }
+    }
     if (code != HTTP_CODE_OK) {
       if (code == 401) err = "Servono utente e password";
       else err = code < 0 ? "Rete: " + http.errorToString(code) : "HTTP " + String(code);
       http.end();
       return;
     }
-    StreamSource src(*http.getStreamPtr(), http.getSize());
+    setPhase("Scarico i dati");
+    StreamSource src(*http.getStreamPtr(), http.getSize(), &progress_);
     bool ok = gtfsrt::parse(src, filter, res) && src.complete();
     http.end();
     if (!ok) err = res.bytes ? "Formato non valido" : "Risposta vuota";
+  }
+
+  void setPhase(const char* p) {
+    lock();
+    phase_ = p;
+    unlock();
   }
 
   void lock() { xSemaphoreTake(mutex_, portMAX_DELAY); }
@@ -207,4 +251,6 @@ class Fetcher {
   uint32_t generation_req_ = 0, generation_res_ = 0;
   uint32_t last_ok_ms_ = 0, last_duration_ms_ = 0;
   uint64_t last_bytes_ = 0;
+  String phase_;
+  volatile uint32_t progress_ = 0;
 };

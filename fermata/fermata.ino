@@ -598,6 +598,11 @@ void drawBoard(uint32_t ms) {
   String t;
   if (WiFi.status() != WL_CONNECTED) t = "WiFi non connesso  -  ";
   else if (st.error.length()) t = "Errore: " + st.error + "  -  ";
+  if (st.phase.length()) {
+    t += st.phase + "...";
+    if (st.progress) t += " " + String(st.progress / 1024) + " KB";
+    t += "  -  ";
+  }
   if (st.has_data) t += "Aggiornato " + ageText(st.last_ok_ms) + "  -  ";
   t += feedName(*f) + " (" + regionOf(*f) + ")  -  fermata " + f->stops;
   if (settings.gift_message.length()) t += "  -  " + settings.gift_message;
