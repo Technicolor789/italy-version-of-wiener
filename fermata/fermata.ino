@@ -164,6 +164,24 @@ void requestDepartures() {
   if (f) {
     r.stops = f->stops;
     r.label = f->name;
+    // Lines are typed as shown on the bus ("31"); the feed may use other
+    // route_ids ("550"), so keep both the name and every id mapped to it.
+    String wanted = f->lines;
+    wanted.replace(";", ",");
+    int start = 0;
+    while (start < (int)wanted.length()) {
+      int end = wanted.indexOf(',', start);
+      if (end < 0) end = wanted.length();
+      String line = wanted.substring(start, end);
+      line.trim();
+      if (line.length()) {
+        r.routes += line + ",";
+        Settings::forEachPair(settings.line_names, true, [&](const String& id, const String& name) {
+          if (name.equalsIgnoreCase(line)) r.routes += id + ",";
+        });
+      }
+      start = end + 1;
+    }
     const FeedInfo* fi = findFeed(f->feed.c_str());
     if (f->feed == "custom") {
       r.url = settings.custom_url;
@@ -224,6 +242,22 @@ String ageText(uint32_t ms) {
   return String(s / 60) + " min fa";
 }
 
+// Line names and fleet models from the settings page.
+void decorate(gtfsrt::Result& r) {
+  for (int i = 0; i < r.count; ++i) {
+    gtfsrt::Departure& d = r.deps[i];
+    String name = Settings::lookup(settings.line_names, d.route, true);
+    if (name.length()) strlcpy(d.route, name.c_str(), sizeof(d.route));
+    if (!d.headsign[0] && d.vehicle[0]) {
+      String model = Settings::lookup(settings.fleet, d.vehicle, false);
+      String text = d.vehicle;
+      if (model.length()) text += " - " + model;
+      else if (d.plate[0]) text += "  " + String(d.plate);
+      strlcpy(d.headsign, text.c_str(), sizeof(d.headsign));
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Network
 // ---------------------------------------------------------------------------
@@ -235,6 +269,7 @@ String departuresHtml() {
   bool data = false;
   uint32_t seen = UINT32_MAX;
   fetcher.snapshot(r, data, seen);
+  decorate(r);
   Fetcher::Status st = fetcher.status();
   String h = "<p><b>" + f->name + "</b> &middot; " + feedName(*f) + " &middot; ID " + f->stops + "</p>";
   if (st.error.length()) h += "<p class=hint>Errore: " + st.error + "</p>";
@@ -524,7 +559,7 @@ void drawBoard(uint32_t ms) {
     return;
   }
 
-  fetcher.snapshot(result, has_data, seen_generation);
+  if (fetcher.snapshot(result, has_data, seen_generation)) decorate(result);
   Fetcher::Status st = fetcher.status();
   info.busy = st.busy;
   info.status = boardStatus(st);
@@ -736,7 +771,7 @@ void loop() {
     case Mode::Menu: ui.menuFrame(ms, menuTitle(), items, item_count, menu_sel); break;
     case Mode::Clock: {
       if (demo) demoDepartures(nowEpoch());
-      else fetcher.snapshot(result, has_data, seen_generation);
+      else if (fetcher.snapshot(result, has_data, seen_generation)) decorate(result);
       ui.clockFrame(ms, nowEpoch(), timeValid() || demo, nextDepartureLine());
       break;
     }

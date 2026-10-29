@@ -43,23 +43,35 @@ int main(int argc, char** argv) {
          res.trip_updates, res.count, (unsigned long long)res.bytes, (long long)res.feed_timestamp);
   for (int i = 0; i < res.count; ++i) {
     auto& d = res.deps[i];
-    printf("  %-4s +%5llds delay=%d(%d) skip=%d '%s'\n", d.route, (long long)(d.time - now),
-           d.delay, d.has_delay, d.skipped, d.headsign);
+    printf("  %-4s +%5llds delay=%d(%d) skip=%d '%s' veh='%s' plate='%s'\n", d.route, (long long)(d.time - now),
+           d.delay, d.has_delay, d.skipped, d.headsign, d.vehicle, d.plate);
   }
   CHECK(ok);
-  CHECK(res.entities == 10);
+  CHECK(res.entities == 11);
   CHECK(res.feed_timestamp == now);
   CHECK(res.bytes == data.size());
-  CHECK(res.count == 5);
-  if (res.count == 5) {
+  CHECK(res.count == 6);
+  if (res.count == 6) {
     CHECK(strcmp(res.deps[0].route, "H") == 0 && res.deps[0].time == now + 60);
-    CHECK(strcmp(res.deps[0].headsign, "Capolinea Termini") == 0);
-    CHECK(strcmp(res.deps[1].route, "40") == 0 && res.deps[1].skipped);
-    CHECK(strcmp(res.deps[2].route, "64") == 0 && res.deps[2].delay == -60);
-    CHECK(strcmp(res.deps[2].headsign, "San Pietro") == 0);
-    CHECK(strcmp(res.deps[3].route, "C3") == 0 && res.deps[3].delay == 300);
-    CHECK(strcmp(res.deps[4].route, "8") == 0 && !res.deps[4].has_delay);
+    CHECK(strcmp(res.deps[0].vehicle, "H-12") == 0 && res.deps[0].headsign[0] == 0);
+    CHECK(strcmp(res.deps[1].route, "550") == 0 && res.deps[1].delay == 56);
+    CHECK(strcmp(res.deps[1].vehicle, "K4153") == 0 && strcmp(res.deps[1].plate, "FZ758DN") == 0);
+    CHECK(strcmp(res.deps[2].route, "40") == 0 && res.deps[2].skipped);
+    CHECK(strcmp(res.deps[3].route, "64") == 0 && res.deps[3].delay == -60);
+    CHECK(strcmp(res.deps[3].headsign, "San Pietro") == 0);
+    CHECK(strcmp(res.deps[4].route, "C3") == 0 && res.deps[4].delay == 300);
+    CHECK(strcmp(res.deps[5].route, "8") == 0 && !res.deps[5].has_delay);
   }
+
+  // Route filter: only line 550 and 64.
+  gtfsrt::Filter only;
+  only.setStops("70017");
+  only.setRoutes("550, 64");
+  only.now = now;
+  ChunkSource only_src(data);
+  gtfsrt::Result only_res;
+  CHECK(gtfsrt::parse(only_src, only, only_res));
+  CHECK(only_res.count == 2);
 
   // A truncated download must be reported as a failure.
   std::vector<uint8_t> cut(data.begin(), data.begin() + data.size() / 2);

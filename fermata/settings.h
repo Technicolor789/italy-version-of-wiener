@@ -8,6 +8,7 @@ struct Favorite {
   String name;
   String feed;   // key of kFeeds
   String stops;  // "70017,70018"
+  String lines;  // optional: only these lines, "31,E1" (names or route_ids)
 };
 
 struct Settings {
@@ -15,6 +16,8 @@ struct Settings {
   String gift_message = GIFT_MESSAGE;
   String proxy_url = DEFAULT_PROXY_URL;
   String custom_url;
+  String line_names;  // route_id -> line shown on the badge: "550=31, 478=30"
+  String fleet;       // fleet number -> model, one per line: "K4153=Iveco Crossway 10,8 m"
   String feed_user[kFeedCount];  // HTTP Basic credentials, by kFeeds index
   String feed_pass[kFeedCount];
   Favorite favorites[MAX_FAVORITES];
@@ -33,6 +36,8 @@ struct Settings {
     gift_message = p.getString("gift_msg", GIFT_MESSAGE);
     proxy_url = p.getString("proxy", DEFAULT_PROXY_URL);
     custom_url = p.getString("custom_url", "");
+    line_names = p.getString("line_names", "");
+    fleet = p.getString("fleet", "");
     for (int i = 0; i < kFeedCount; ++i) {
       feed_user[i] = p.getString(("u" + String(i)).c_str(), "");
       feed_pass[i] = p.getString(("p" + String(i)).c_str(), "");
@@ -56,6 +61,8 @@ struct Settings {
     p.putString("gift_msg", gift_message);
     p.putString("proxy", proxy_url);
     p.putString("custom_url", custom_url);
+    p.putString("line_names", line_names);
+    p.putString("fleet", fleet);
     for (int i = 0; i < kFeedCount; ++i) {
       p.putString(("u" + String(i)).c_str(), feed_user[i]);
       p.putString(("p" + String(i)).c_str(), feed_pass[i]);
@@ -80,12 +87,13 @@ struct Settings {
     return favorite_count ? &favorites[active] : nullptr;
   }
 
-  // "Nome|feed|stops;Nome|feed|stops" - '|' and ';' are stripped from input.
+  // "Nome|feed|stops|lines;Nome|feed|stops" - '|' and ';' are stripped from input.
   String favoritesString() const {
     String out;
     for (int i = 0; i < favorite_count; ++i) {
       if (i) out += ';';
       out += favorites[i].name + '|' + favorites[i].feed + '|' + favorites[i].stops;
+      if (favorites[i].lines.length()) out += '|' + favorites[i].lines;
     }
     return out;
   }
@@ -102,11 +110,41 @@ struct Settings {
         Favorite& f = favorites[favorite_count];
         f.name = item.substring(0, a);
         f.feed = item.substring(a + 1, b);
-        f.stops = item.substring(b + 1);
+        int c = item.indexOf('|', b + 1);
+        f.stops = c < 0 ? item.substring(b + 1) : item.substring(b + 1, c);
+        f.lines = c < 0 ? String("") : item.substring(c + 1);
         if (f.stops.length() && findFeed(f.feed.c_str())) favorite_count++;
       }
       start = end + 1;
     }
+  }
+
+  // Calls fn(key, value) for each "key=value" of a table. Entries are split
+  // by newlines, and also by commas unless the values may contain commas.
+  template <typename Fn>
+  static void forEachPair(const String& table, bool commas, Fn fn) {
+    int start = 0, len = table.length();
+    while (start < len) {
+      int end = start;
+      while (end < len && table[end] != '\n' && !(commas && table[end] == ',')) ++end;
+      String item = table.substring(start, end);
+      int eq = item.indexOf('=');
+      if (eq > 0) {
+        String k = item.substring(0, eq), v = item.substring(eq + 1);
+        k.trim();
+        v.trim();
+        if (k.length() && v.length()) fn(k, v);
+      }
+      start = end + 1;
+    }
+  }
+
+  static String lookup(const String& table, const String& key, bool commas) {
+    String found;
+    forEachPair(table, commas, [&](const String& k, const String& v) {
+      if (!found.length() && k == key) found = v;
+    });
+    return found;
   }
 
   static String clean(String s) {

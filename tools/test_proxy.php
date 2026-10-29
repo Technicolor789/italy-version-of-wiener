@@ -15,7 +15,7 @@ print(f.header.timestamp, sorted(e.trip_update.trip.route_id for e in f.entity))
 PY;
 $got = trim(shell_exec('python3 -c ' . escapeshellarg($py) . ' ' . escapeshellarg($tmp)));
 unlink($tmp);
-$want = "1764590400 ['19', '40', '64', '8', '8', 'C3', 'H', 'MEA']";
+$want = "1764590400 ['19', '40', '550', '64', '8', '8', 'C3', 'H', 'MEA']";
 printf("proxy filter: %d -> %d bytes, %s\n", strlen($feed), strlen($filtered), $got);
 if ($got !== $want) {
     echo "FAILED, expected $want\n";

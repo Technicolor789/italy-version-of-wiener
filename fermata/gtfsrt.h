@@ -17,10 +17,13 @@ namespace gtfsrt {
 static const int kMaxStops = 6;        // stop_ids per favourite
 static const int kMaxDepartures = 16;  // departures kept per fetch
 static const int kMaxStopsPerTrip = 3; // a circular line can pass twice
+static const int kMaxRoutes = 16;      // route filter of a favourite
 
 struct Departure {
   char route[12];
   char headsign[40];
+  char vehicle[16];  // fleet number ("matricola"), or the vehicle label
+  char plate[12];    // licence plate ("targa")
   int64_t time;    // unix epoch of departure (or arrival)
   int32_t delay;   // seconds, valid if has_delay
   bool has_delay;
@@ -138,33 +141,47 @@ class Reader {
 struct Filter {
   char stops[kMaxStops][32];
   int count = 0;
+  char routes[kMaxRoutes][16];  // route_ids to keep; empty = all
+  int route_count = 0;
   int64_t now = 0;              // drop departures before now - past_s
   int64_t past_s = 60;
   int64_t horizon_s = 3 * 3600; // ... and after now + horizon_s
 
   // Accepts "123, 456 ,789".
-  void setStops(const char* csv) {
-    count = 0;
-    while (*csv && count < kMaxStops) {
+  void setStops(const char* csv) { count = splitCsv(csv, &stops[0][0], kMaxStops, sizeof(stops[0])); }
+  void setRoutes(const char* csv) { route_count = splitCsv(csv, &routes[0][0], kMaxRoutes, sizeof(routes[0])); }
+
+  bool matches(const char* id) const {
+    for (int i = 0; i < count; ++i)
+      if (strcmp(stops[i], id) == 0) return true;
+    return false;
+  }
+
+  bool routeWanted(const char* route) const {
+    if (route_count == 0) return true;
+    for (int i = 0; i < route_count; ++i)
+      if (strcmp(routes[i], route) == 0) return true;
+    return false;
+  }
+
+ private:
+  static int splitCsv(const char* csv, char* out, int max, size_t width) {
+    int n_out = 0;
+    while (*csv && n_out < max) {
       while (*csv == ' ' || *csv == ',' || *csv == ';') ++csv;
       size_t n = 0;
       while (csv[n] && csv[n] != ',' && csv[n] != ';') ++n;
       size_t end = n;
       while (end > 0 && csv[end - 1] == ' ') --end;
       if (end > 0) {
-        size_t keep = end < sizeof(stops[0]) - 1 ? end : sizeof(stops[0]) - 1;
-        memcpy(stops[count], csv, keep);
-        stops[count][keep] = 0;
-        ++count;
+        size_t keep = end < width - 1 ? end : width - 1;
+        memcpy(out + n_out * width, csv, keep);
+        out[n_out * width + keep] = 0;
+        ++n_out;
       }
       csv += n;
     }
-  }
-
-  bool matches(const char* id) const {
-    for (int i = 0; i < count; ++i)
-      if (strcmp(stops[i], id) == 0) return true;
-    return false;
+    return n_out;
   }
 };
 
@@ -234,7 +251,9 @@ class Parser {
   struct Trip {
     char route[12];
     char headsign[40];
-    char label[40];
+    char vehicle_id[16];
+    char label[16];
+    char plate[12];
     int32_t trip_delay;
     bool has_trip_delay;
     Match matches[kMaxStopsPerTrip];
@@ -320,6 +339,7 @@ class Parser {
     });
     if (!ok) return false;
 
+    if (!f_.routeWanted(trip_.route)) return true;
     for (int i = 0; i < trip_.n_matches; ++i) emit(trip_.matches[i]);
     return true;
   }
@@ -349,7 +369,9 @@ class Parser {
     }
     d.skipped = m.skipped;
     strncpy(d.route, trip_.route, sizeof(d.route) - 1);
-    strncpy(d.headsign, trip_.headsign[0] ? trip_.headsign : trip_.label, sizeof(d.headsign) - 1);
+    strncpy(d.headsign, trip_.headsign, sizeof(d.headsign) - 1);
+    strncpy(d.vehicle, trip_.vehicle_id[0] ? trip_.vehicle_id : trip_.label, sizeof(d.vehicle) - 1);
+    strncpy(d.plate, trip_.plate, sizeof(d.plate) - 1);
     out_.add(d);
   }
 
@@ -364,10 +386,13 @@ class Parser {
 
   bool vehicle(uint64_t end) {
     return fields(end, [&](uint32_t field, uint32_t wt, bool& handled) {
-      handled = field == 2 && wt == 2;
+      handled = wt == 2 && field >= 1 && field <= 3;
       if (!handled) return true;
       uint64_t n;
-      return r_.varint(n) && r_.string(n, trip_.label, sizeof(trip_.label));
+      if (!r_.varint(n)) return false;
+      if (field == 1) return r_.string(n, trip_.vehicle_id, sizeof(trip_.vehicle_id));
+      if (field == 2) return r_.string(n, trip_.label, sizeof(trip_.label));
+      return r_.string(n, trip_.plate, sizeof(trip_.plate));
     });
   }
 

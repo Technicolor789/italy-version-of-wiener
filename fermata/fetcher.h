@@ -47,6 +47,7 @@ struct FetchRequest {
   String url;
   String stops;
   String label;
+  String routes;  // route_ids to keep, empty = all
   String user;  // HTTP Basic, if the feed needs it
   String pass;
 };
@@ -156,6 +157,7 @@ class Fetcher {
   void download(const FetchRequest& r, gtfsrt::Result& res, String& err) {
     gtfsrt::Filter filter;
     filter.setStops(r.stops.c_str());
+    filter.setRoutes(r.routes.c_str());
     filter.now = time(nullptr);
 
     bool https = r.url.startsWith("https");

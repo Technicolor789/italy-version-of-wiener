@@ -12,7 +12,7 @@ feed = g.FeedMessage()
 feed.header.gtfs_realtime_version = "2.0"
 feed.header.timestamp = now
 
-def trip(eid, route, stops, headsign=None, label=None, alert=False):
+def trip(eid, route, stops, headsign=None, label=None, alert=False, vid=None, plate=None):
     e = feed.entity.add()
     e.id = eid
     tu = e.trip_update
@@ -22,6 +22,10 @@ def trip(eid, route, stops, headsign=None, label=None, alert=False):
         tu.trip_properties.trip_headsign = headsign
     if label:
         tu.vehicle.label = label
+    if vid:
+        tu.vehicle.id = vid
+    if plate:
+        tu.vehicle.license_plate = plate
     for stop_id, kind, value, delay in stops:
         s = tu.stop_time_update.add()
         s.stop_id = stop_id
@@ -36,7 +40,8 @@ def trip(eid, route, stops, headsign=None, label=None, alert=False):
         feed.entity.add().id = eid + "-noise"
 
 trip("1", "64", [("100", "dep", 300, 120), ("70017", "dep", 420, -60)], headsign="San Pietro")
-trip("2", "H", [("70017", "arr", 60, 0)], label="Capolinea Termini")
+trip("2", "H", [("70017", "arr", 60, 0)], label="H-12")
+trip("10", "550", [("70017", "dep", 100, 56)], label="L1", vid="K4153", plate="FZ758DN")
 trip("3", "8", [("70017", "dep", 7200, None)])             # inside the horizon
 trip("4", "8", [("70017", "dep", 5 * 3600, None)])          # beyond the horizon
 trip("5", "910", [("99999", "dep", 100, 0)])                # other stop

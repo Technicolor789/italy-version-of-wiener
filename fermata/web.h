@@ -69,8 +69,8 @@ class WebUi {
            "h1 span{color:var(--acc)}main{max-width:720px;margin:auto;padding:0 16px 40px}"
            "section{background:var(--card);border-radius:14px;padding:16px;margin:14px 0}"
            "h2{margin:0 0 10px;font-size:18px;color:var(--acc)}label{display:block;font-size:13px;color:var(--dim);margin:10px 0 4px}"
-           "input,select{width:100%;padding:10px;border-radius:8px;border:1px solid #2a4a8a;background:#061c4c;color:#fff;font-size:16px}"
-           ".fav{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:10px 0;border-top:1px solid #1d3d7d}"
+           "input,select,textarea{width:100%;padding:10px;border-radius:8px;border:1px solid #2a4a8a;background:#061c4c;color:#fff;font-size:16px}"
+           ".fav{display:grid;grid-template-columns:1.2fr 1.2fr 1fr 1fr;gap:8px;padding:10px 0;border-top:1px solid #1d3d7d}"
            ".fav:first-of-type{border-top:0}.fav label{margin-top:0}"
            "@media(max-width:560px){.fav{grid-template-columns:1fr}}"
            "button{margin-top:16px;width:100%;padding:14px;border:0;border-radius:10px;background:var(--acc);color:#0a1432;font-size:18px;font-weight:700}"
@@ -93,7 +93,9 @@ class WebUi {
       h += "<div class=fav><div><label>Nome</label><input name=n" + n + " maxlength=40 placeholder='es. Sotto casa' value=\"" +
            esc(f ? f->name : "") + "\"></div><div><label>Operatore</label><select name=f" + n + ">" +
            feedOptions(f ? f->feed : String(kFeeds[0].key)) + "</select></div><div><label>ID fermata</label><input name=s" + n +
-           " maxlength=120 placeholder='es. 70017' value=\"" + esc(f ? f->stops : "") + "\"></div></div>";
+           " maxlength=120 placeholder='es. 70017' value=\"" + esc(f ? f->stops : "") +
+           "\"></div><div><label>Solo linee (facoltativo)</label><input name=l" + n +
+           " maxlength=120 placeholder='es. 31,E1,E24' value=\"" + esc(f ? f->lines : "") + "\"></div></div>";
     }
     h += F("<details><summary>Come trovo l'ID della fermata?</summary><p class=hint>"
            "&bull; Cerca la fermata su <b>transit.land</b> (scegli l'operatore, poi la fermata): "
@@ -117,6 +119,12 @@ class WebUi {
     h += F("<small>Con <i>proxy.php</i> di questo progetto il display scarica solo le corse delle sue fermate.</small>"
            "<label>URL feed personalizzato (GTFS-RT TripUpdates)</label>");
     h += "<input name=custom_url placeholder='https://...' value=\"" + esc(s_.custom_url) + "\">";
+    h += F("</section><section><h2>Linee e flotta</h2><p class=hint>Nel feed le linee hanno spesso un codice "
+           "interno (es. la 31 &egrave; <i>550</i>): scrivi qui <b>codice=linea</b> per vedere il numero giusto sul display.</p>"
+           "<label>Nomi delle linee</label>");
+    h += "<textarea name=line_names rows=3 placeholder='550=31, 478=30'>" + esc(s_.line_names) + "</textarea>";
+    h += F("<label>Flotta: matricola=modello (una per riga)</label>");
+    h += "<textarea name=fleet rows=4 placeholder='K4153=Iveco Crossway 10,8 m'>" + esc(s_.fleet) + "</textarea>";
     h += F("</section><section><h2>Accesso ai feed</h2><p class=hint>Alcuni operatori (es. Busitalia Padova) "
            "danno il feed solo con utente e password: chiedili all'operatore e scrivili qui. "
            "Lascia vuota la password per non cambiarla; svuota l'utente per toglierle.</p>");
@@ -146,6 +154,7 @@ class WebUi {
       f.stops = stops;
       f.feed = feed;
       f.name = Settings::clean(server_.arg("n" + idx));
+      f.lines = Settings::clean(server_.arg("l" + idx));
       if (!f.name.length()) f.name = "Fermata " + stops;
     }
     s_.favorite_count = n;
@@ -157,6 +166,11 @@ class WebUi {
     s_.brightness = constrain(server_.arg("bright").toInt(), 1, 5);
     s_.proxy_url = Settings::clean(server_.arg("proxy"));
     s_.custom_url = Settings::clean(server_.arg("custom_url"));
+    s_.line_names = server_.arg("line_names").substring(0, 1500);
+    s_.line_names.trim();
+    s_.fleet = server_.arg("fleet").substring(0, 3000);
+    s_.fleet.replace("\r", "");
+    s_.fleet.trim();
     for (int i = 0; i < kFeedCount; ++i) {
       String n(i);
       if (!server_.hasArg("u" + n)) continue;
