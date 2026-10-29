@@ -497,6 +497,7 @@ void drawBoard(uint32_t ms) {
   Ui::BoardInfo info;
   info.demo = demo;
   info.busy = false;
+  info.time_ok = demo || timeValid();
 
   if (demo) {
     demoDepartures(now);

@@ -100,5 +100,5 @@ static const int kThemeCount = sizeof(kThemes) / sizeof(kThemes[0]);
 static const uint16_t kLineColors[] = {
   RGB565(230, 50, 50),  RGB565(0, 140, 70),   RGB565(0, 110, 200),
   RGB565(240, 130, 0),  RGB565(140, 60, 170), RGB565(0, 150, 160),
-  RGB565(200, 40, 120), RGB565(110, 120, 20),
+  RGB565(200, 40, 120), RGB565(90, 90, 200),
 };

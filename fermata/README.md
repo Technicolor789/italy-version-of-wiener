@@ -3,6 +3,13 @@
 Un piccolo tabellone delle partenze in tempo reale per la scrivania. Usa i feed
 GTFS‑Realtime degli operatori italiani, organizzati per regione.
 
+![Animazione di avvio](../img/fermata_boot.gif)
+
+![Tabellone, menù e orologio](../img/fermata_screens.png)
+
+*Anteprime generate da un simulatore sul PC: sul display reale i font e
+l'orologio a 7 segmenti sono leggermente diversi.*
+
 - **Animazione di avvio**: cielo stellato, binari tricolore, un treno che entra in
   stazione e frena, la scritta *FERMATA* che cade lettera per lettera e il saluto
   personalizzato.

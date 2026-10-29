@@ -101,12 +101,12 @@ class Ui {
     }
 
     // A moon, because it's always a bit magic at night.
-    s_.fillSmoothCircle(282, 26, 12, RGB565(250, 240, 200), sky_top);
-    s_.fillSmoothCircle(288, 22, 11, s_.alphaBlend(200, sky_top, sky_bot), RGB565(250, 240, 200));
+    s_.fillSmoothCircle(300, 18, 9, RGB565(250, 240, 200), sky_top);
+    s_.fillSmoothCircle(305, 15, 8, s_.alphaBlend(220, sky_top, sky_bot), RGB565(250, 240, 200));
 
     // Rails drawn in green, white and red from left to right.
     const int rail_y = 124;
-    float rails = easeOutCubic((t - 100) / 700.0f);
+    float rails = easeOutCubic(((int32_t)t - 100) / 700.0f);
     int rail_w = (int)(W * rails);
     s_.fillRect(0, rail_y, rail_w, 2, RGB565(0, 146, 70));
     s_.fillRect(0, rail_y + 2, rail_w, 2, TFT_WHITE);
@@ -114,14 +114,14 @@ class Ui {
     for (int x = 6; x < rail_w; x += 18) s_.fillRect(x, rail_y + 7, 8, 2, RGB565(60, 60, 80));
 
     // The train slides in and brakes at the stop.
-    float arrive = easeOutCubic((t - 300) / 1500.0f);
+    float arrive = easeOutCubic(((int32_t)t - 300) / 1500.0f);
     int train_x = -200 + (int)(arrive * 270);
     float speed = 1.0f - arrive;
     if (t > 300) drawTrain(train_x, 76, speed, t);
 
     // Stop sign on the platform.
     if (t > 1500) {
-      float pop = easeOutBounce((t - 1500) / 500.0f);
+      float pop = easeOutBounce(((int32_t)t - 1500) / 500.0f);
       int sh = (int)(34 * pop);
       s_.fillRect(26, rail_y - sh, 3, sh, RGB565(180, 180, 190));
       if (pop > 0.6f) {
@@ -141,8 +141,8 @@ class Ui {
     int x = (W - total) / 2;
     for (int i = 0; title[i]; ++i) {
       char ch[2] = {title[i], 0};
-      float p = easeOutBounce((t - 1500 - i * 90) / 600.0f);
-      if (t > 1500 + i * 90) {
+      float p = easeOutBounce(((int32_t)t - 1500 - i * 90) / 600.0f);
+      if ((int32_t)t > 1500 + i * 90) {
         int y = 8 - (int)((1 - p) * 70);
         s_.setTextColor(RGB565(0, 0, 10));
         s_.drawString(ch, x + 2, y + 2);
@@ -155,7 +155,7 @@ class Ui {
     // Sparkles around the title once it has landed.
     if (t > 2400) {
       for (int i = 0; i < 6; ++i) {
-        float ph = (t - 2400) / 700.0f + i * 0.37f;
+        float ph = ((int32_t)t - 2400) / 700.0f + i * 0.37f;
         float k = sinf(ph * 3.14159f);
         if (k <= 0) continue;
         int sx = 40 + (i * 53) % 240, sy = 6 + (i * 29) % 46;
@@ -167,7 +167,7 @@ class Ui {
     }
 
     // Greeting and status at the bottom.
-    float fade = clamp01((t - 2600) / 600.0f);
+    float fade = clamp01(((int32_t)t - 2600) / 600.0f);
     if (fade > 0) {
       s_.setFreeFont(&FreeSansBold9pt7b);
       s_.setTextDatum(MC_DATUM);
@@ -211,7 +211,7 @@ class Ui {
     int bx = 34, by = 50 + (int)((1 - in) * -90) + (int)(3 * sinf(t / 300.0f));
     uint16_t red = RGB565(206, 43, 55), gold = RGB565(255, 204, 0);
     s_.fillSmoothRoundRect(bx, by + 18, 56, 44, 4, red, RGB565(20, 16, 60));
-    float lid = t > 1400 ? easeOutCubic((t - 1400) / 600.0f) : 0;
+    float lid = t > 1400 ? easeOutCubic(((int32_t)t - 1400) / 600.0f) : 0;
     int ly = by + 6 - (int)(lid * 14);
     s_.fillSmoothRoundRect(bx - 4, ly, 64, 14, 3, s_.alphaBlend(200, red, TFT_WHITE), RGB565(20, 16, 60));
     s_.fillRect(bx + 24, by + 18, 8, 44, gold);
@@ -225,7 +225,7 @@ class Ui {
       }
     }
 
-    float txt = clamp01((t - 600) / 700.0f);
+    float txt = clamp01(((int32_t)t - 600) / 700.0f);
     uint16_t bg = RGB565(18, 18, 62);
     s_.setTextDatum(TL_DATUM);
     s_.setFreeFont(&FreeSansBold18pt7b);
@@ -276,7 +276,7 @@ class Ui {
     s_.setTextColor(th.text);
     s_.drawString("2. Scegli la tua rete di casa", 92, 106);
     s_.drawString("   e inserisci la password.", 92, 126);
-    footer("OK = modalita' demo senza WiFi");
+    footer("BOOT = modalita' demo senza WiFi");
   }
 
   // -------------------------------------------------------------------------
@@ -288,6 +288,7 @@ class Ui {
     int status;       // 0 ok, 1 stale/connecting, 2 error
     bool busy;
     bool demo;
+    bool time_ok;     // false until NTP has answered: no clock in the header
   };
 
   void boardFrame(uint32_t ms, time_t now, const gtfsrt::Result& res, bool has_data, const BoardInfo& info) {
@@ -302,10 +303,10 @@ class Ui {
     int visible = count - first;
 
     if (!has_data) {
-      emptyState(ms, info.status == 2 ? "Dati non disponibili" : "Carico le partenze...",
-                 info.status == 2 ? "Riprovo tra poco" : "Un attimo di pazienza", info.status != 2);
+      if (info.status == 2) emptyState(ms, "Dati non pronti", "Riprovo tra poco", kWarning);
+      else emptyState(ms, "Carico...", "Un attimo di pazienza", kSpinner);
     } else if (visible == 0) {
-      emptyState(ms, "Nessuna partenza", "nelle prossime 3 ore", false);
+      emptyState(ms, "Nessuna partenza", "nelle prossime 3 ore", kMoon);
     } else {
       int pages = (visible + 2) / 3;
       const uint32_t page_ms = 6000, slide_ms = 450;
@@ -326,7 +327,7 @@ class Ui {
       }
     }
 
-    header(info.stop_name, &now, info.busy, info.status, ms);
+    header(info.stop_name, info.time_ok ? &now : nullptr, info.busy, info.status, ms, true);
     if (info.demo) badge("DEMO", 4, 6);
     tickerFooter(info.ticker, ms, has_data && visible > 3 ? (visible + 2) / 3 : 1);
   }
@@ -428,12 +429,14 @@ class Ui {
     s_.fillSprite(th.bg);
     header(title, nullptr, false, 0, ms);
     s_.setTextDatum(TL_DATUM);
+    int y = 34;
     for (int i = 0; i < n; ++i) {
       const String& l = lines[i];
       bool strong = l.startsWith("*");
       s_.setFreeFont(strong ? &FreeSansBold12pt7b : &FreeSans9pt7b);
       s_.setTextColor(strong ? th.accent : th.text);
-      s_.drawString(ascii(strong ? l.substring(1) : l), 10, 34 + i * 22);
+      s_.drawString(ascii(strong ? l.substring(1) : l), 10, y);
+      y += strong ? 28 : 21;
     }
     footer(hint);
   }
@@ -486,9 +489,11 @@ class Ui {
     }
     // Headlight beam on the rails.
     float glow = 0.6f + 0.4f * sinf(t / 180.0f);
-    for (int i = 0; i < 4; ++i) {
-      uint16_t c = s_.alphaBlend((uint8_t)(40 * glow), RGB565(255, 240, 160), sky);
-      s_.fillTriangle(x + w - 4, y + h - 13, x + w + 70 + i * 6, y + h - 22 - i * 3, x + w + 70 + i * 6, y + h + 2 + i, c);
+    for (int dx = 2; dx < 90; dx += 2) {
+      float k = 1.0f - dx / 90.0f;
+      int half = 2 + dx / 6;
+      uint16_t c = s_.alphaBlend((uint8_t)(110 * k * k * glow), RGB565(255, 240, 160), sky);
+      s_.drawFastVLine(x + w - 4 + dx, y + h - 13 - half + dx / 8, 2 * half, c);
     }
 
     // Pantograph.
@@ -531,7 +536,7 @@ class Ui {
     }
   }
 
-  void header(const String& title, const time_t* now, bool busy, int status, uint32_t ms) {
+  void header(const String& title, const time_t* now, bool busy, int status, uint32_t ms, bool icon = false) {
     const Theme& th = *th_;
     s_.fillRect(0, 0, W, 26, th.panel);
     s_.drawFastHLine(0, 26, W, th.accent);
@@ -567,7 +572,7 @@ class Ui {
 
     // Title; scrolls if it does not fit.
     int left = 8;
-    if (now) {
+    if (icon) {
       drawBusIcon(left, 6, th.accent, th.panel);
       left += 26;
     }
@@ -738,10 +743,16 @@ class Ui {
     s_.resetViewport();
   }
 
-  void emptyState(uint32_t ms, const char* title, const char* subtitle, bool spinner) {
+  enum EmptyIcon { kSpinner, kMoon, kWarning };
+
+  void emptyState(uint32_t ms, const char* title, const char* subtitle, EmptyIcon icon) {
     const Theme& th = *th_;
-    int cx = 60, cy = 90;
-    if (spinner) {
+    int cx = 56, cy = 90;
+    if (icon == kWarning) {
+      s_.fillTriangle(cx, cy - 24, cx - 26, cy + 20, cx + 26, cy + 20, th.late);
+      s_.fillRect(cx - 2, cy - 10, 5, 18, TFT_WHITE);
+      s_.fillRect(cx - 2, cy + 11, 5, 5, TFT_WHITE);
+    } else if (icon == kSpinner) {
       for (int i = 0; i < 12; ++i) {
         float a = i * 0.5236f;
         int k = (int)((ms / 70 + i) % 12);
@@ -758,12 +769,12 @@ class Ui {
       for (int i = 0; i <= z; ++i) s_.drawString("z", cx + 24 + i * 9, cy - 20 - i * 9);
     }
     s_.setTextDatum(ML_DATUM);
-    s_.setFreeFont(&FreeSansBold12pt7b);
     s_.setTextColor(th.text);
-    s_.drawString(title, 104, 80);
+    fitFont(title, W - 104, &FreeSansBold12pt7b, &FreeSansBold9pt7b);
+    s_.drawString(title, 96, 80);
     s_.setFreeFont(&FreeSans9pt7b);
     s_.setTextColor(th.dim);
-    s_.drawString(subtitle, 104, 106);
+    s_.drawString(subtitle, 96, 106);
   }
 
   void snow(uint32_t ms) {
