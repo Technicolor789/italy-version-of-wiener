@@ -636,7 +636,8 @@ void drawPage(uint32_t ms) {
       uint32_t mv = analogReadMilliVolts(PIN_BAT_ADC) * 2;
       lines[n++] = mv > 4400 || mv < 2500 ? String("Alimentazione USB") : String("Batteria " + String(mv / 1000.0f, 2) + " V");
       uint32_t up = millis() / 60000;
-      lines[n++] = "Versione " FERMATA_VERSION "   acceso da " + String(up / 60) + " h " + String(up % 60) + " min";
+      lines[n++] = "v" FERMATA_VERSION "  PSRAM " + String(psramFound() ? "si" : "NO") + "  RAM " +
+                   String(ESP.getMaxAllocHeap() / 1024) + " KB  acceso " + String(up / 60) + "h" + String(up % 60);
       break;
     }
     case PageId::Configure:
@@ -684,6 +685,8 @@ void setup() {
   tft.fillScreen(TFT_BLACK);
   setBacklight(settings.brightness);
   ui.begin(&kThemes[settings.theme]);
+  Serial.printf("[boot] Fermata %s, PSRAM %s, heap libero %u (blocco max %u)\n", FERMATA_VERSION,
+                psramFound() ? "si" : "NO", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
   btn_ok.begin();
   btn_next.begin();
 

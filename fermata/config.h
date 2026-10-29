@@ -1,7 +1,7 @@
 // Everything you may want to personalise before flashing the gift.
 #pragma once
 
-#define FERMATA_VERSION "1.0"
+#define FERMATA_VERSION "1.1"
 
 // ---------------------------------------------------------------------------
 // Regalo: shown on the very first boot (with confetti) and as a greeting on

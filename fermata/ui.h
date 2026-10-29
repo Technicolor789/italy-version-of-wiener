@@ -60,9 +60,10 @@ class Ui {
 
   void begin(const Theme* theme) {
     th_ = theme;
-    s_.setColorDepth(16);
+    // A 16 bit frame takes 108 KB: fine in PSRAM, but in internal RAM it
+    // leaves too little for HTTPS. Without PSRAM use 8 bit colour (54 KB).
+    s_.setColorDepth(psramFound() ? 16 : 8);
     if (!s_.createSprite(W, H)) {
-      // No PSRAM and not enough heap: 8 bit colour still looks fine.
       s_.setColorDepth(8);
       s_.createSprite(W, H);
     }
