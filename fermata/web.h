@@ -5,17 +5,65 @@
 #include "config.h"
 #include "settings.h"
 
+static const char kWifiPage[] PROGMEM = R"HTML(<!doctype html><html lang=it><head><meta charset=utf-8>
+<meta name=viewport content='width=device-width,initial-scale=1'><title>WiFi - Fermata</title><style>
+:root{--bg:#04163f;--card:#0c2864;--text:#fff;--dim:#a9b8d8;--acc:#ffcc00}
+*{box-sizing:border-box}body{margin:0;font:16px system-ui,sans-serif;background:var(--bg);color:var(--text)}
+header{display:flex;align-items:center;gap:12px;padding:18px 16px 6px;max-width:560px;margin:auto}
+header a{color:var(--acc);text-decoration:none;font-size:22px}h1{margin:0;font-size:24px}
+main{max-width:560px;margin:auto;padding:0 16px 40px}.list{background:var(--card);border-radius:14px;overflow:hidden;margin-top:12px}
+.net{padding:14px 16px;border-top:1px solid #1d3d7d;cursor:pointer}.net:first-child{border-top:0}
+.row{display:flex;align-items:center;gap:12px}.name{flex:1;font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cur{color:var(--acc);font-size:13px}.lock{opacity:.8}.form{display:none;margin-top:12px}.open .form{display:block}
+input{width:100%;padding:12px;border-radius:10px;border:1px solid #2a4a8a;background:#061c4c;color:#fff;font-size:17px}
+label{display:flex;gap:8px;align-items:center;color:var(--dim);font-size:14px;margin:8px 0}
+button{width:100%;margin-top:8px;padding:13px;border:0;border-radius:10px;background:var(--acc);color:#0a1432;font-size:17px;font-weight:700}
+.hint{color:var(--dim);font-size:14px;text-align:center;margin:14px 0}.msg{background:var(--card);border-radius:14px;padding:18px;margin-top:12px;line-height:1.5}
+svg{flex:none}</style></head><body>
+<header><a href=/>&#8249;</a><h1>WiFi</h1></header><main>
+<div id=list class=list><div class=net><div class=row><span class=name>Cerco le reti...</span></div></div></div>
+<p class=hint><a href=# onclick='scan();return false' style='color:var(--acc)'>Aggiorna</a></p></main>
+<script>
+function bars(r){var n=r>-55?4:r>-65?3:r>-75?2:1,s='<svg width=22 height=18 viewBox="0 0 22 18">';
+for(var i=0;i<4;i++){var h=4+i*4;s+='<rect x="'+(i*6)+'" y="'+(18-h)+'" width="4" height="'+h+'" rx="1" fill="'+(i<n?'#fff':'#ffffff40')+'"/>'}return s+'</svg>'}
+function esc(t){var d=document.createElement('div');d.textContent=t;return d.innerHTML}
+function scan(){document.getElementById('list').innerHTML='<div class=net><div class=row><span class=name>Cerco le reti...</span></div></div>';poll()}
+function poll(){fetch('/api/scan').then(function(r){return r.json()}).then(function(j){if(j.scanning){setTimeout(poll,800);return}show(j)}).catch(function(){setTimeout(poll,1500)})}
+function show(j){var h='';j.networks.sort(function(a,b){return (b.ssid==j.current)-(a.ssid==j.current)||b.rssi-a.rssi});
+j.networks.forEach(function(n,i){var c=n.ssid==j.current;h+='<div class=net id=n'+i+' onclick="tap('+i+')"><div class=row><span class=name>'+esc(n.ssid)+(c?' <span class=cur>&#10003; connesso</span>':'')+'</span>'+(n.secure?'<span class=lock>&#128274;</span>':'')+bars(n.rssi)+'</div>'
++(c?'':'<div class=form onclick="event.stopPropagation()">'+(n.secure?'<input type=password id=p'+i+' placeholder=Password autocomplete=off><label><input type=checkbox style="width:auto" onchange="document.getElementById(\'p'+i+'\').type=this.checked?\'text\':\'password\'"> Mostra password</label>':'')
++'<button onclick="go('+i+')">Connetti</button></div>')+'</div>'});
+window.nets=j.networks;document.getElementById('list').innerHTML=h||'<div class=net>Nessuna rete trovata</div>'}
+function tap(i){var e=document.getElementById('n'+i),o=e.classList.contains('open');document.querySelectorAll('.open').forEach(function(x){x.classList.remove('open')});if(!o){e.classList.add('open');var p=document.getElementById('p'+i);if(p)p.focus()}}
+function go(i){var n=window.nets[i],p=document.getElementById('p'+i),b=new URLSearchParams();b.append('ssid',n.ssid);b.append('pass',p?p.value:'');
+fetch('/api/wifi',{method:'POST',body:b}).then(function(){document.querySelector('main').innerHTML='<div class=msg>&#128246; Il display si sta collegando a <b>'+esc(n.ssid)+'</b>.<br><br>Se la password &egrave; giusta, collega anche il telefono a <b>'+esc(n.ssid)+'</b> e riapri <b>fermata.local</b>.<br><br>Se &egrave; sbagliata, entro 30 secondi il display torna alla rete di prima: lo vedi scritto sullo schermo.</div>'})}
+scan();
+</script></body></html>)HTML";
+
 class WebUi {
  public:
   typedef std::function<void()> Callback;
   typedef std::function<String()> StatusHtml;
+  typedef std::function<void(const String&, const String&)> WifiConnect;
 
   WebUi(Settings& s) : server_(80), s_(s) {}
 
-  void begin(Callback on_save, StatusHtml status) {
+  void begin(Callback on_save, StatusHtml status, WifiConnect on_wifi) {
     on_save_ = on_save;
     status_ = status;
+    on_wifi_ = on_wifi;
     server_.on("/", HTTP_GET, [this] { server_.send(200, "text/html; charset=utf-8", page()); });
+    server_.on("/wifi", HTTP_GET, [this] { server_.send(200, "text/html; charset=utf-8", String(FPSTR(kWifiPage))); });
+    server_.on("/api/scan", HTTP_GET, [this] { scan(); });
+    server_.on("/api/wifi", HTTP_POST, [this] {
+      String ssid = server_.arg("ssid");
+      if (!ssid.length()) {
+        server_.send(400, "application/json", "{\"ok\":false}");
+        return;
+      }
+      server_.send(200, "application/json", "{\"ok\":true}");
+      if (on_wifi_) on_wifi_(ssid, server_.arg("pass"));
+    });
     server_.on("/save", HTTP_POST, [this] { save(); });
     server_.onNotFound([this] {
       server_.sendHeader("Location", "/");
@@ -25,6 +73,48 @@ class WebUi {
   }
 
   void loop() { server_.handleClient(); }
+
+  static String json(const String& in) {
+    String out = "\"";
+    for (size_t i = 0; i < in.length(); ++i) {
+      char c = in[i];
+      if (c == '"' || c == '\\') {
+        out += '\\';
+        out += c;
+      } else if ((uint8_t)c >= 0x20) {
+        out += c;
+      }
+    }
+    return out + "\"";
+  }
+
+ private:
+  // Asynchronous scan: the page polls until the results are ready.
+  void scan() {
+    int n = WiFi.scanComplete();
+    if (n == WIFI_SCAN_FAILED) WiFi.scanNetworks(true);
+    if (n < 0) {
+      server_.send(200, "application/json", "{\"scanning\":true}");
+      return;
+    }
+    String out = "{\"current\":" + json(WiFi.SSID()) + ",\"networks\":[";
+    bool first = true;
+    for (int i = 0; i < n; ++i) {
+      String ssid = WiFi.SSID(i);
+      if (!ssid.length()) continue;
+      bool dup = false;  // the same network on several access points
+      for (int k = 0; k < i && !dup; ++k) dup = WiFi.SSID(k) == ssid;
+      if (dup) continue;
+      if (!first) out += ',';
+      first = false;
+      out += "{\"ssid\":" + json(ssid) + ",\"rssi\":" + String(WiFi.RSSI(i)) +
+             ",\"secure\":" + (WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "false" : "true") + "}";
+    }
+    WiFi.scanDelete();
+    server_.send(200, "application/json", out + "]}");
+  }
+
+ public:
 
  private:
   static String esc(const String& in) {
@@ -92,7 +182,9 @@ class WebUi {
            "background:var(--acc);color:#0a1432;border-radius:6px;font-weight:700;padding:2px 6px}"
            "details{margin-top:8px}summary{cursor:pointer;color:var(--acc)}"
            "</style></head><body><header><h1>&#128655; <span>Fermata</span></h1>"
-           "<small>Il tabellone delle partenze sulla tua scrivania</small></header><main>");
+           "<small>Il tabellone delle partenze sulla tua scrivania</small>"
+           "<p><a href=/wifi style='display:inline-block;padding:10px 16px;border-radius:10px;background:var(--card);"
+           "color:var(--acc);text-decoration:none;font-weight:700'>&#128246; Rete WiFi</a></p></header><main>");
 
     if (status_) h += "<section><h2>Ora sul display</h2>" + status_() + "</section>";
 
@@ -220,4 +312,5 @@ class WebUi {
   Settings& s_;
   Callback on_save_;
   StatusHtml status_;
+  WifiConnect on_wifi_;
 };

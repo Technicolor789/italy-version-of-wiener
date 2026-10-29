@@ -246,6 +246,51 @@ String ageText(uint32_t ms) {
   return String(s / 60) + " min fa";
 }
 
+// Changing network from the web page. If the new one does not connect in
+// 20 s, go back to the previous one so the display never stays offline.
+struct WifiChange {
+  bool pending = false, trying = false;
+  String ssid, pass, old_ssid, old_pass;
+  uint32_t since = 0;
+} wifi_change;
+
+void requestWifi(const String& ssid, const String& pass) {
+  wifi_change.ssid = ssid;
+  wifi_change.pass = pass;
+  wifi_change.pending = true;
+  wifi_change.trying = false;
+  wifi_change.since = millis();
+}
+
+void wifiChangeLoop() {
+  WifiChange& w = wifi_change;
+  if (!w.pending) return;
+  if (!w.trying) {
+    if (millis() - w.since < 1500) return;  // let the page get its answer
+    w.old_ssid = WiFi.SSID();
+    w.old_pass = WiFi.psk();
+    w.trying = true;
+    w.since = millis();
+    toast("Mi collego a " + w.ssid);
+    WiFi.disconnect();
+    WiFi.begin(w.ssid.c_str(), w.pass.c_str());
+    return;
+  }
+  if (WiFi.status() == WL_CONNECTED && WiFi.SSID() == w.ssid) {
+    w.pending = false;
+    MDNS.end();
+    MDNS.begin(HOSTNAME);
+    MDNS.addService("http", "tcp", 80);
+    toast("Connesso a " + w.ssid);
+    requestDepartures();
+  } else if (millis() - w.since > 20000) {
+    w.pending = false;
+    toast("Password errata? Torno a " + w.old_ssid);
+    WiFi.disconnect();
+    WiFi.begin(w.old_ssid.c_str(), w.old_pass.c_str());
+  }
+}
+
 // Line names and fleet models from the settings page.
 void decorate(gtfsrt::Result& r) {
   for (int i = 0; i < r.count; ++i) {
@@ -332,7 +377,7 @@ void goOnline() {
         requestDepartures();
         toast("Impostazioni salvate");
       },
-      departuresHtml);
+      departuresHtml, requestWifi);
   fetcher.begin();
   requestDepartures();
 }
@@ -709,6 +754,7 @@ void loop() {
   if (online) {
     web.loop();
     checkNight();
+    wifiChangeLoop();
   }
   if (wm.getConfigPortalActive()) wm.process();
 
