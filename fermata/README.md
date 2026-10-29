@@ -106,6 +106,16 @@ Serve lo `stop_id` del GTFS statico dell'operatore:
 
 Se una fermata ha un ID per direzione, mettili entrambi separati da virgola.
 
+## Feed con password (Busitalia Padova)
+
+I feed di Busitalia Veneto (bus e tram di Padova) chiedono **utente e
+password** (HTTP Basic). Le credenziali vanno chieste a Busitalia Veneto, che
+le dà a chi usa i dati aperti; poi si scrivono nella sezione *Accesso ai feed*
+di `http://fermata.local`. Se mancano o sono sbagliate, il display scrive
+*Servono utente e password*. Con il proxy invece si impostano sul server, per
+esempio `FEED_AUTH_BUSITALIA_VENETO=utente:password` e
+`FEED_AUTH_BUSITALIA_TRAM=utente:password`.
+
 ## Proxy (facoltativo, ma consigliato per feed grandi)
 
 Il display scarica e decodifica il feed in streaming, quindi funziona anche senza

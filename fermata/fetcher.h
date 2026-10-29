@@ -47,6 +47,8 @@ struct FetchRequest {
   String url;
   String stops;
   String label;
+  String user;  // HTTP Basic, if the feed needs it
+  String pass;
 };
 
 class Fetcher {
@@ -168,13 +170,15 @@ class Fetcher {
     http.setConnectTimeout(10000);
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
     http.setUserAgent("Fermata-ESP32/" FERMATA_VERSION);
+    if (r.user.length()) http.setAuthorization(r.user.c_str(), r.pass.c_str());
     if (!http.begin(client, r.url)) {
       err = "URL non valido";
       return;
     }
     int code = http.GET();
     if (code != HTTP_CODE_OK) {
-      err = code < 0 ? "Rete: " + http.errorToString(code) : "HTTP " + String(code);
+      if (code == 401) err = "Servono utente e password";
+      else err = code < 0 ? "Rete: " + http.errorToString(code) : "HTTP " + String(code);
       http.end();
       return;
     }

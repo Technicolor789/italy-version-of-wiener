@@ -15,6 +15,8 @@ struct Settings {
   String gift_message = GIFT_MESSAGE;
   String proxy_url = DEFAULT_PROXY_URL;
   String custom_url;
+  String feed_user[kFeedCount];  // HTTP Basic credentials, by kFeeds index
+  String feed_pass[kFeedCount];
   Favorite favorites[MAX_FAVORITES];
   int favorite_count = 0;
   int active = 0;
@@ -31,6 +33,10 @@ struct Settings {
     gift_message = p.getString("gift_msg", GIFT_MESSAGE);
     proxy_url = p.getString("proxy", DEFAULT_PROXY_URL);
     custom_url = p.getString("custom_url", "");
+    for (int i = 0; i < kFeedCount; ++i) {
+      feed_user[i] = p.getString(("u" + String(i)).c_str(), "");
+      feed_pass[i] = p.getString(("p" + String(i)).c_str(), "");
+    }
     theme = constrain(p.getInt("theme", 0), 0, kThemeCount - 1);
     brightness = constrain(p.getInt("bright", 3), 1, 5);
     flip = p.getBool("flip", false);
@@ -50,6 +56,10 @@ struct Settings {
     p.putString("gift_msg", gift_message);
     p.putString("proxy", proxy_url);
     p.putString("custom_url", custom_url);
+    for (int i = 0; i < kFeedCount; ++i) {
+      p.putString(("u" + String(i)).c_str(), feed_user[i]);
+      p.putString(("p" + String(i)).c_str(), feed_pass[i]);
+    }
     p.putInt("theme", theme);
     p.putInt("bright", brightness);
     p.putBool("flip", flip);

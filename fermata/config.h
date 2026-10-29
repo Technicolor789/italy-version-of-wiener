@@ -44,28 +44,34 @@ struct FeedInfo {
   const char* region;
   const char* name;
   const char* url;
+  bool needs_login;  // HTTP Basic: credentials are asked to the operator
 };
 
 static const FeedInfo kFeeds[] = {
   {"atac_roma", "Lazio", "ATAC Roma",
-   "https://romamobilita.it/sites/default/files/rome_rtgtfs_trip_updates_feed.pb"},
+   "https://romamobilita.it/sites/default/files/rome_rtgtfs_trip_updates_feed.pb", false},
   {"toscana", "Toscana", "Autolinee Toscane",
-   "https://regionetoscana.smartregion.toscana.it/mobility/artifacts/gtfs-rt/trip-updates"},
+   "https://regionetoscana.smartregion.toscana.it/mobility/artifacts/gtfs-rt/trip-updates", false},
   {"actv_veneto", "Veneto", "ACTV Venezia",
-   "https://tpl.actv.it/aut/GTFSRT/tripUpdates"},
+   "https://tpl.actv.it/aut/GTFSRT/tripUpdates", false},
   {"busitalia_veneto", "Veneto", "Busitalia Padova",
-   "https://gtfs-biv.fsbusitalia.com/GTFSRT-BIV/start-gtfs-rt-trip-updates-fc.pb"},
+   "https://gtfs-biv.fsbusitalia.com/GTFSRT-BIV/start-gtfs-rt-trip-updates-fc.pb", true},
   {"busitalia_tram", "Veneto", "Tram Padova",
-   "https://gtfs-biv.fsbusitalia.com/GTFSRT-BIV-TRAM/gtfs-rt-trip-updates.pb"},
+   "https://gtfs-biv.fsbusitalia.com/GTFSRT-BIV-TRAM/gtfs-rt-trip-updates.pb", true},
   // "custom" uses the URL typed on the web page.
-  {"custom", "Altro", "Feed personalizzato", ""},
+  {"custom", "Altro", "Feed personalizzato", "", false},
 };
 static const int kFeedCount = sizeof(kFeeds) / sizeof(kFeeds[0]);
 
-inline const FeedInfo* findFeed(const char* key) {
+inline int feedIndex(const char* key) {
   for (int i = 0; i < kFeedCount; ++i)
-    if (strcmp(kFeeds[i].key, key) == 0) return &kFeeds[i];
-  return nullptr;
+    if (strcmp(kFeeds[i].key, key) == 0) return i;
+  return -1;
+}
+
+inline const FeedInfo* findFeed(const char* key) {
+  int i = feedIndex(key);
+  return i < 0 ? nullptr : &kFeeds[i];
 }
 
 // ---------------------------------------------------------------------------

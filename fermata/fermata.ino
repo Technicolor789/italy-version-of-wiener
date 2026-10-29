@@ -173,6 +173,12 @@ void requestDepartures() {
     } else if (fi) {
       r.url = fi->url;
     }
+    // The proxy holds its own credentials; send ours only to the feed itself.
+    int idx = feedIndex(f->feed.c_str());
+    if (idx >= 0 && (f->feed == "custom" || !settings.proxy_url.length())) {
+      r.user = settings.feed_user[idx];
+      r.pass = settings.feed_pass[idx];
+    }
   }
   has_data = false;
   fetcher.request(r);

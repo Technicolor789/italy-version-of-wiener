@@ -117,6 +117,18 @@ class WebUi {
     h += F("<small>Con <i>proxy.php</i> di questo progetto il display scarica solo le corse delle sue fermate.</small>"
            "<label>URL feed personalizzato (GTFS-RT TripUpdates)</label>");
     h += "<input name=custom_url placeholder='https://...' value=\"" + esc(s_.custom_url) + "\">";
+    h += F("</section><section><h2>Accesso ai feed</h2><p class=hint>Alcuni operatori (es. Busitalia Padova) "
+           "danno il feed solo con utente e password: chiedili all'operatore e scrivili qui. "
+           "Lascia vuota la password per non cambiarla; svuota l'utente per toglierle.</p>");
+    for (int i = 0; i < kFeedCount; ++i) {
+      if (!kFeeds[i].needs_login && !s_.feed_user[i].length() && strcmp(kFeeds[i].key, "custom") != 0) continue;
+      String n(i);
+      h += "<div class=fav><div><label>" + String(kFeeds[i].name) + "</label><input value=\"" + String(kFeeds[i].region) +
+           "\" disabled></div><div><label>Utente</label><input name=u" + n + " autocomplete=off value=\"" +
+           esc(s_.feed_user[i]) + "\"></div><div><label>Password</label><input name=p" + n +
+           " type=password autocomplete=new-password placeholder='" + (s_.feed_pass[i].length() ? "(salvata)" : "") +
+           "'></div></div>";
+    }
     h += F("</section><button>Salva</button></form>"
            "<p class=hint style='text-align:center'>Fermata " FERMATA_VERSION "</p></main></body></html>");
     return h;
@@ -145,6 +157,15 @@ class WebUi {
     s_.brightness = constrain(server_.arg("bright").toInt(), 1, 5);
     s_.proxy_url = Settings::clean(server_.arg("proxy"));
     s_.custom_url = Settings::clean(server_.arg("custom_url"));
+    for (int i = 0; i < kFeedCount; ++i) {
+      String n(i);
+      if (!server_.hasArg("u" + n)) continue;
+      s_.feed_user[i] = server_.arg("u" + n);
+      s_.feed_user[i].trim();
+      String pass = server_.arg("p" + n);
+      if (!s_.feed_user[i].length()) s_.feed_pass[i] = "";
+      else if (pass.length()) s_.feed_pass[i] = pass;
+    }
     s_.save();
     if (on_save_) on_save_();
 

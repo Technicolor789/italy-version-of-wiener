@@ -74,6 +74,13 @@ if ($body === false) {
         CURLOPT_SSL_VERIFYPEER => true,
         CURLOPT_USERAGENT => 'GTFS-RT-Proxy/1.0',
     ]);
+    // Feeds behind HTTP Basic auth: set FEED_AUTH_<FEED>=user:password,
+    // es. FEED_AUTH_BUSITALIA_VENETO, in the server environment.
+    $auth = getenv('FEED_AUTH_' . strtoupper($feed));
+    if ($auth) {
+        curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+        curl_setopt($ch, CURLOPT_USERPWD, $auth);
+    }
 
     $body = curl_exec($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
