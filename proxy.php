@@ -1,5 +1,6 @@
 <?php
 require __DIR__ . '/gtfs_filter.php';
+require __DIR__ . '/gtfs_static.php';
 
 // CORS must be sent before any other output
 header('Access-Control-Allow-Origin: *');
@@ -34,8 +35,37 @@ if (empty($feed)) {
     echo json_encode([
         'error' => 'Missing feed parameter',
         'usage' => '?feed=toscana',
-        'available' => array_keys($FEEDS)
+        'available' => array_merge(array_keys($FEEDS), array_keys(GTFS_STATIC_FEEDS))
     ]);
+    exit;
+}
+
+// Timetable-only feeds (es. Trenord): ?search=NAME finds stop ids,
+// ?stops=ID,ID returns the next scheduled departures as GTFS-RT.
+if (isset(GTFS_STATIC_FEEDS[$feed])) {
+    try {
+        $db = gtfs_static_open($feed);
+        if (isset($_GET['search'])) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(gtfs_static_search($db, trim($_GET['search'])), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+            exit;
+        }
+        $stops = array_values(array_filter(array_map('trim', explode(',', $_GET['stops'] ?? '')), 'strlen'));
+        if (!$stops) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Missing stops parameter', 'usage' => "?feed=$feed&stops=ID or ?feed=$feed&search=Milano"]);
+            exit;
+        }
+        $body = gtfs_static_feed(gtfs_static_departures($db, $stops, time()), time());
+    } catch (Throwable $e) {
+        http_response_code(503);
+        echo json_encode(['error' => $e->getMessage()]);
+        exit;
+    }
+    header('Content-Type: application/x-protobuf');
+    header('Cache-Control: no-cache');
+    header('Content-Length: ' . strlen($body));
+    echo $body;
     exit;
 }
 

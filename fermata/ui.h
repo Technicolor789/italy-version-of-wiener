@@ -289,10 +289,12 @@ class Ui {
     bool busy;
     bool demo;
     bool time_ok;     // false until NTP has answered: no clock in the header
+    bool scheduled;   // timetable feed: no live delays
   };
 
   void boardFrame(uint32_t ms, time_t now, const gtfsrt::Result& res, bool has_data, const BoardInfo& info) {
     const Theme& th = *th_;
+    scheduled_ = info.scheduled;
     s_.fillSprite(th.bg);
 
     const int top = 28, rows_h = 126, row_h = 42;
@@ -730,7 +732,7 @@ class Ui {
     String punct;
     uint16_t pc;
     if (d.skipped) { punct = "fermata soppressa"; pc = th.late; }
-    else if (!d.has_delay) { punct = "in tempo reale"; pc = th.dim; }
+    else if (!d.has_delay) { punct = scheduled_ ? "orario programmato" : "in tempo reale"; pc = th.dim; }
     else if (d.delay >= 90) { punct = "ritardo " + String((d.delay + 30) / 60) + " min"; pc = th.late; }
     else if (d.delay <= -90) { punct = "anticipo " + String((-d.delay + 30) / 60) + " min"; pc = th.early; }
     else { punct = "in orario"; pc = th.ok; }
@@ -815,4 +817,5 @@ class Ui {
   Star stars_[60];
   std::vector<Particle> confetti_;
   float menu_hl_ = 30, menu_scroll_ = 0;
+  bool scheduled_ = false;
 };

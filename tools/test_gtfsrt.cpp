@@ -31,6 +31,22 @@ int main(int argc, char** argv) {
   while ((c = fgetc(f)) != EOF) data.push_back(c);
   fclose(f);
 
+  if (argc > 3) {  // feed built by gtfs_static.php from tools/make_test_gtfs.py
+    gtfsrt::Filter f;
+    f.setStops("S_MI,S_MI_1");
+    f.now = now;
+    ChunkSource src(data);
+    gtfsrt::Result res;
+    CHECK(gtfsrt::parse(src, f, res));
+    CHECK(res.count == 3);
+    if (res.count == 3) {
+      CHECK(strcmp(res.deps[0].route, "S5") == 0 && strcmp(res.deps[0].headsign, "Treviglio") == 0);
+      CHECK(res.deps[0].time == now + 420 && !res.deps[0].has_delay);
+    }
+    printf(failures ? "FAILED\n" : "PASSED (static)\n");
+    return failures ? 1 : 0;
+  }
+
   gtfsrt::Filter filter;
   filter.setStops(" 70017 , 70018");
   filter.now = now;

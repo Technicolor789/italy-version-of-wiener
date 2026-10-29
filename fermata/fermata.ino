@@ -189,7 +189,7 @@ void requestDepartures() {
       r.url = settings.proxy_url + (settings.proxy_url.indexOf('?') >= 0 ? "&" : "?") + "feed=" + f->feed +
               "&stops=" + urlEncode(f->stops);
     } else if (fi) {
-      r.url = fi->url;
+      r.url = fi->url;  // empty for timetable feeds: they need the proxy
     }
     // The proxy holds its own credentials; send ours only to the feed itself.
     int idx = feedIndex(f->feed.c_str());
@@ -567,6 +567,7 @@ void drawBoard(uint32_t ms) {
   info.demo = demo;
   info.busy = false;
   info.time_ok = demo || timeValid();
+  info.scheduled = false;
 
   if (demo) {
     demoDepartures(now);
@@ -592,6 +593,8 @@ void drawBoard(uint32_t ms) {
   info.busy = st.busy;
   info.status = boardStatus(st);
   info.stop_name = f->name;
+  const FeedInfo* fi = findFeed(f->feed.c_str());
+  info.scheduled = fi && fi->scheduled;
   String t;
   if (WiFi.status() != WL_CONNECTED) t = "WiFi non connesso  -  ";
   else if (st.error.length()) t = "Errore: " + st.error + "  -  ";

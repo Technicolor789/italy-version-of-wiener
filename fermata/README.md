@@ -106,6 +106,22 @@ Serve lo `stop_id` del GTFS statico dell'operatore:
 
 Se una fermata ha un ID per direzione, mettili entrambi separati da virgola.
 
+## Lombardia: orari Trenord (programmati)
+
+In Lombardia non ci sono feed in tempo reale aperti a tutti, ma Regione
+Lombardia pubblica il **GTFS statico** di Trenord. `proxy.php` (insieme a
+`gtfs_static.php`) lo importa in un piccolo database e risponde con le
+prossime partenze nello stesso formato GTFS‑RT: sul display compaiono con la
+scritta *orario programmato* invece di *in orario*.
+
+- Serve l'**URL del proxy** nella pagina `fermata.local`.
+- Per trovare l'ID di una stazione: apri
+  `https://<il-tuo-proxy>/proxy.php?feed=trenord&search=Milano` e copia l'`id`.
+  Si può mettere anche l'ID della stazione "madre": il proxy include tutti i
+  suoi binari.
+- Il Dockerfile prepara gli orari durante il deploy (o usa `gtfs/trenord.zip`
+  se è nel repo) e il proxy li riscarica da solo ogni settimana.
+
 ## Feed con password (Busitalia Padova)
 
 I feed di Busitalia Veneto (bus e tram di Padova) chiedono **utente e

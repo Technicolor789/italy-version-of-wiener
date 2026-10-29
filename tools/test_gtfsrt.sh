@@ -9,5 +9,9 @@ g++ -std=c++17 -Wall -Wextra -O1 -fsanitize=address,undefined test_gtfsrt.cpp -o
 "$tmp/test" "$tmp/feed.pb" $now
 if command -v php >/dev/null; then
   php test_proxy.php "$tmp/feed.pb"
+  # Static timetable -> GTFS-RT, read back by the display's parser.
+  python3 make_test_gtfs.py "$tmp/gtfs.zip"
+  php test_static.php "$tmp/gtfs.zip" "$tmp/static.pb"
+  "$tmp/test" "$tmp/static.pb" 1796110500 static
 fi
 rm -rf "$tmp"

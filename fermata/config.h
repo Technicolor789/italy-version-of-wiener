@@ -50,21 +50,25 @@ struct FeedInfo {
   const char* name;
   const char* url;
   bool needs_login;  // HTTP Basic: credentials are asked to the operator
+  bool scheduled;    // timetable only (no live delays), served by proxy.php
 };
 
 static const FeedInfo kFeeds[] = {
   {"atac_roma", "Lazio", "ATAC Roma",
-   "https://romamobilita.it/sites/default/files/rome_rtgtfs_trip_updates_feed.pb", false},
+   "https://romamobilita.it/sites/default/files/rome_rtgtfs_trip_updates_feed.pb", false, false},
+  // Lombardia: no open live feed; timetables built by proxy.php from the
+  // static GTFS published by Regione Lombardia (needs the proxy URL).
+  {"trenord", "Lombardia", "Trenord (orari)", "", false, true},
   {"toscana", "Toscana", "Autolinee Toscane",
-   "https://regionetoscana.smartregion.toscana.it/mobility/artifacts/gtfs-rt/trip-updates", false},
+   "https://regionetoscana.smartregion.toscana.it/mobility/artifacts/gtfs-rt/trip-updates", false, false},
   {"actv_veneto", "Veneto", "ACTV Venezia",
-   "https://tpl.actv.it/aut/GTFSRT/tripUpdates", false},
+   "https://tpl.actv.it/aut/GTFSRT/tripUpdates", false, false},
   {"busitalia_veneto", "Veneto", "Busitalia Padova",
-   "https://gtfs-biv.fsbusitalia.com/GTFSRT-BIV/start-gtfs-rt-trip-updates-fc.pb", true},
+   "https://gtfs-biv.fsbusitalia.com/GTFSRT-BIV/start-gtfs-rt-trip-updates-fc.pb", true, false},
   {"busitalia_tram", "Veneto", "Tram Padova",
-   "https://gtfs-biv.fsbusitalia.com/GTFSRT-BIV-TRAM/gtfs-rt-trip-updates.pb", true},
+   "https://gtfs-biv.fsbusitalia.com/GTFSRT-BIV-TRAM/gtfs-rt-trip-updates.pb", true, false},
   // "custom" uses the URL typed on the web page.
-  {"custom", "Altro", "Feed personalizzato", "", false},
+  {"custom", "Altro", "Feed personalizzato", "", false, false},
 };
 static const int kFeedCount = sizeof(kFeeds) / sizeof(kFeeds[0]);
 

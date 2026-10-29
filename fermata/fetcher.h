@@ -121,6 +121,10 @@ class Fetcher {
       if (!r.url.length()) {
         lock();
         busy_ = false;
+        if (r.stops.length() && gen == generation_req_) {
+          error_ = "Serve l'URL del proxy";
+          generation_res_++;
+        }
         unlock();
         continue;
       }

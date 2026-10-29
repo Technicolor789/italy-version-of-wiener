@@ -114,7 +114,8 @@ class WebUi {
            "&bull; Cerca la fermata su <b>transit.land</b> (scegli l'operatore, poi la fermata): "
            "il campo <i>stop_id</i> &egrave; quello che serve.<br>"
            "&bull; Oppure scarica il GTFS statico dell'operatore e apri <i>stops.txt</i>.<br>"
-           "&bull; ATAC Roma: di solito &egrave; il numero della palina scritto sulla fermata.</p></details>"
+           "&bull; ATAC Roma: di solito &egrave; il numero della palina scritto sulla fermata.<br>"
+           "&bull; Trenord: apri <i>URL-del-proxy</i><b>?feed=trenord&amp;search=Milano</b> e copia l'<i>id</i> della stazione.</p></details>"
            "</section><section><h2>Saluto</h2>");
     h += "<label>Nome di chi lo riceve</label><input name=gift_name maxlength=24 value=\"" + esc(s_.gift_name) + "\">";
     h += "<label>Messaggio</label><input name=gift_msg maxlength=90 value=\"" + esc(s_.gift_message) + "\">";
