@@ -318,7 +318,9 @@ String departuresHtml() {
 void goOnline() {
   if (online) return;
   online = true;
-  configTzTime(TZ_ITALY, "pool.ntp.org", "time.inrim.it", "time.google.com");
+  ensureDns();
+  // The last server is time.cloudflare.com by address, for routers without DNS.
+  configTzTime(TZ_ITALY, "pool.ntp.org", "time.google.com", "162.159.200.123");
   MDNS.begin(HOSTNAME);
   MDNS.addService("http", "tcp", 80);
   web.begin(

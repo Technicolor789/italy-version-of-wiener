@@ -5,8 +5,24 @@
 #include <HTTPClient.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <lwip/dns.h>
 #include "config.h"
 #include "gtfsrt.h"
+
+// Some routers hand out an address but do not answer DNS queries: then
+// switch to Google and Cloudflare resolvers. Returns false if even those fail.
+inline bool ensureDns() {
+  IPAddress ip;
+  if (WiFi.hostByName("pool.ntp.org", ip) == 1) return true;
+  ip_addr_t d1, d2;
+  IP_ADDR4(&d1, 8, 8, 8, 8);
+  IP_ADDR4(&d2, 1, 1, 1, 1);
+  dns_setserver(0, &d1);
+  dns_setserver(1, &d2);
+  bool ok = WiFi.hostByName("pool.ntp.org", ip) == 1;
+  Serial.printf("[net] il DNS del router non risponde, uso 8.8.8.8: %s\n", ok ? "ok" : "niente internet");
+  return ok;
+}
 
 // "Thu, 29 Oct 2026 13:05:00 GMT" (HTTP Date header) -> unix time, 0 if invalid.
 inline time_t parseHttpDate(const String& s) {
@@ -134,6 +150,14 @@ class Fetcher {
       ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(REFRESH_SECONDS * 1000));
       setPhase("Attendo il WiFi");
       while (WiFi.status() != WL_CONNECTED) vTaskDelay(pdMS_TO_TICKS(500));
+      if (!ensureDns()) {
+        lock();
+        error_ = "WiFi senza internet (DNS)";
+        generation_res_++;
+        phase_ = "";
+        unlock();
+        continue;
+      }
       // The clock drops past departures. If NTP does not answer (some
       // routers block it) go on: download() takes the time from the server.
       setPhase("Attendo l'ora da internet");
