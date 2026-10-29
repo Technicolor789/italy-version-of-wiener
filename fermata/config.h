@@ -67,7 +67,7 @@ static const FeedInfo kFeeds[] = {
   {"busitalia_veneto", "Veneto", "Busitalia Padova",
    "https://gtfs-biv.fsbusitalia.com/GTFSRT-BIV/start-gtfs-rt-trip-updates-fc.pb", true, false},
   {"busitalia_tram", "Veneto", "Tram Padova",
-   "https://gtfs-biv.fsbusitalia.com/GTFSRT-BIV-TRAM/gtfs-rt-trip-updates.pb", true, false},
+   "https://gtfs-biv.fsbusitalia.com/GTFSRT-BIV-TRAM/gtfs-rt-trip-updates.pb", false, false},
   // "custom" uses the URL typed on the web page.
   {"custom", "Altro", "Feed personalizzato", "", false, false},
 };

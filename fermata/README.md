@@ -127,7 +127,7 @@ scritta *orario programmato* invece di *in orario*.
 
 ## Feed con password (Busitalia Padova)
 
-I feed di Busitalia Veneto (bus e tram di Padova) chiedono **utente e
+Il feed dei bus di Busitalia Veneto (Padova) chiede **utente e
 password** (HTTP Basic). Le credenziali vanno chieste a Busitalia Veneto, che
 le dà a chi usa i dati aperti; poi si scrivono nella sezione *Accesso ai feed*
 di `http://fermata.local`. Se mancano o sono sbagliate, il display scrive
