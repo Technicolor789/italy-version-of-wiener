@@ -22,7 +22,7 @@ static const int kMaxRoutes = 16;      // route filter of a favourite
 struct Departure {
   char route[12];
   char headsign[40];
-  char vehicle[16];  // fleet number ("matricola"), or the vehicle label
+  char vehicle[16];  // fleet number ("matricola"): the label, else the id
   char plate[12];    // licence plate ("targa")
   int64_t time;    // unix epoch of departure (or arrival)
   int32_t delay;   // seconds, valid if has_delay
@@ -370,7 +370,8 @@ class Parser {
     d.skipped = m.skipped;
     strncpy(d.route, trip_.route, sizeof(d.route) - 1);
     strncpy(d.headsign, trip_.headsign, sizeof(d.headsign) - 1);
-    strncpy(d.vehicle, trip_.vehicle_id[0] ? trip_.vehicle_id : trip_.label, sizeof(d.vehicle) - 1);
+    // Autolinee Toscane: label "K4153" is the fleet number, id "3211" internal.
+    strncpy(d.vehicle, trip_.label[0] ? trip_.label : trip_.vehicle_id, sizeof(d.vehicle) - 1);
     strncpy(d.plate, trip_.plate, sizeof(d.plate) - 1);
     out_.add(d);
   }
