@@ -186,8 +186,10 @@ void requestDepartures() {
     if (f->feed == "custom") {
       r.url = settings.custom_url;
     } else if (settings.proxy_url.length()) {
-      r.url = settings.proxy_url + (settings.proxy_url.indexOf('?') >= 0 ? "&" : "?") + "feed=" + f->feed +
-              "&stops=" + urlEncode(f->stops);
+      // People paste the URL they tested, es. ".../proxy.php?feed=toscana".
+      String base = settings.proxy_url;
+      if (base.indexOf("feed=") >= 0) base = base.substring(0, base.indexOf('?'));
+      r.url = base + (base.indexOf('?') >= 0 ? "&" : "?") + "feed=" + f->feed + "&stops=" + urlEncode(f->stops);
     } else if (fi) {
       r.url = fi->url;  // empty for timetable feeds: they need the proxy
     }
