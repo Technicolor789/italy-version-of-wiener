@@ -248,12 +248,12 @@ void decorate(gtfsrt::Result& r) {
     gtfsrt::Departure& d = r.deps[i];
     String name = Settings::lookup(settings.line_names, d.route, true);
     if (name.length()) strlcpy(d.route, name.c_str(), sizeof(d.route));
-    if (!d.headsign[0] && d.vehicle[0]) {
+    if (d.vehicle[0]) {
       String model = Settings::lookup(settings.fleet, d.vehicle, false);
       String text = d.vehicle;
       if (model.length()) text += " - " + model;
       else if (d.plate[0]) text += "  " + String(d.plate);
-      strlcpy(d.headsign, text.c_str(), sizeof(d.headsign));
+      strlcpy(d.info, text.c_str(), sizeof(d.info));
     }
   }
 }

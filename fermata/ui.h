@@ -708,7 +708,9 @@ class Ui {
 
     // Middle: destination (if the feed has it) and punctuality.
     int mx = 74, mw = right - min_w - 8 - mx;
+    // Destination and vehicle take turns when the feed has both.
     String head = ascii(String(d.headsign));
+    if (d.info[0] && (!head.length() || (ms / 4000) % 2)) head = ascii(String(d.info));
     if (!head.length()) head = "Linea " + route;
     s_.setViewport(mx, y, mw, h);
     s_.setFreeFont(&FreeSansBold9pt7b);

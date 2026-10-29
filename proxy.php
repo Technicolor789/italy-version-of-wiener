@@ -1,6 +1,7 @@
 <?php
 require __DIR__ . '/gtfs_filter.php';
 require __DIR__ . '/gtfs_static.php';
+require __DIR__ . '/gtfs_names.php';
 
 // CORS must be sent before any other output
 header('Access-Control-Allow-Origin: *');
@@ -66,6 +67,13 @@ if (isset(GTFS_STATIC_FEEDS[$feed])) {
     header('Cache-Control: no-cache');
     header('Content-Length: ' . strlen($body));
     echo $body;
+    exit;
+}
+
+// ?search=NAME for a live feed with names data (es. toscana): stop ids.
+if (isset($_GET['search']) && ($names_db = gtfs_names_open($feed))) {
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(gtfs_names_search($names_db, trim($_GET['search'])), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
     exit;
 }
 
@@ -135,6 +143,10 @@ if ($body === false || $http_code !== 200) {
 if ($stops) {
     try {
         $body = gtfs_filter_stops($body, $stops);
+        // Small enough now to add line numbers and destinations.
+        if ($names_db = gtfs_names_open($feed)) {
+            $body = gtfs_names_enrich($names_db, $body);
+        }
     } catch (RuntimeException $e) {
         http_response_code(502);
         echo json_encode(['error' => 'Invalid feed: ' . $e->getMessage()]);

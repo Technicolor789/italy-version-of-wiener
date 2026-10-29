@@ -16,5 +16,8 @@ RUN cd /var/www/html && mkdir -p data \
       if [ -f gtfs/$feed.zip ]; then php gtfs_static.php build $feed gtfs/$feed.zip; \
       else php gtfs_static.php build $feed; fi || echo "$feed timetable not built now"; \
     done \
+ && for feed in toscana; do \
+      [ -d gtfs/$feed ] && php gtfs_names.php build $feed gtfs/$feed || echo "$feed names not built"; \
+    done \
  && rm -rf gtfs \
  && chown -R www-data:www-data data

@@ -18,7 +18,9 @@
   "Casa|toscana|145028,145462"
 
 // Autolinee Toscane route_ids are not the numbers on the bus: route_id=line.
-#define DEFAULT_LINE_NAMES "550=31, 478=30"
+// Viareggio (also added by the proxy for all of Tuscany when it has the GTFS).
+#define DEFAULT_LINE_NAMES \
+  "547=21, 548=25, 549=27, 550=31, 561=E1, 569=E2, 571=E25, 572=E26, 573=E27, 574=E29"
 
 // Optional: URL of proxy.php from this repository (es.
 // "https://mio-server.it/proxy.php"). With it the display downloads only the

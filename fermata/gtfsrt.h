@@ -24,6 +24,7 @@ struct Departure {
   char headsign[40];
   char vehicle[16];  // fleet number ("matricola"): the label, else the id
   char plate[12];    // licence plate ("targa")
+  char info[40];     // filled by the sketch: vehicle text shown with the headsign
   int64_t time;    // unix epoch of departure (or arrival)
   int32_t delay;   // seconds, valid if has_delay
   bool has_delay;
