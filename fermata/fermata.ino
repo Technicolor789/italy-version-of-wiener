@@ -191,9 +191,11 @@ void requestDepartures() {
     } else if (fi) {
       r.url = fi->url;  // empty for timetable feeds: they need the proxy
     }
-    // The proxy holds its own credentials; send ours only to the feed itself.
+    // Used when the proxy does not answer (empty for timetable feeds).
+    r.direct_url = f->feed == "custom" ? settings.custom_url : String(fi ? fi->url : "");
+    // Sent only to the feed itself: the proxy holds its own credentials.
     int idx = feedIndex(f->feed.c_str());
-    if (idx >= 0 && (f->feed == "custom" || !settings.proxy_url.length())) {
+    if (idx >= 0) {
       r.user = settings.feed_user[idx];
       r.pass = settings.feed_pass[idx];
     }

@@ -68,6 +68,7 @@ struct FetchRequest {
   String stops;
   String label;
   String routes;  // route_ids to keep, empty = all
+  String direct_url;  // the operator's own feed: fallback if the proxy fails
   String user;  // HTTP Basic, if the feed needs it
   String pass;
 };
@@ -157,7 +158,15 @@ class Fetcher {
       String err;
       uint32_t t0 = millis();
       progress_ = 0;
-      download(r, *res, err);
+      download(r, r.url, *res, err);
+      if (err.length() && r.direct_url.length() && r.direct_url != r.url) {
+        Serial.printf("[fetch] proxy: %s, provo il feed diretto\n", err.c_str());
+        String direct_err;
+        *res = gtfsrt::Result();
+        progress_ = 0;
+        download(r, r.direct_url, *res, direct_err);
+        err = direct_err.length() ? "proxy: " + err + ", diretto: " + direct_err : String("");
+      }
       uint32_t took = millis() - t0;
       setPhase("");
 
@@ -184,13 +193,13 @@ class Fetcher {
     }
   }
 
-  void download(const FetchRequest& r, gtfsrt::Result& res, String& err) {
+  void download(const FetchRequest& r, const String& url, gtfsrt::Result& res, String& err) {
     gtfsrt::Filter filter;
     filter.setStops(r.stops.c_str());
     filter.setRoutes(r.routes.c_str());
     filter.now = time(nullptr) > 1700000000 ? time(nullptr) : 0;  // 0: keep all
 
-    bool https = r.url.startsWith("https");
+    bool https = url.startsWith("https");
     WiFiClientSecure secure;
     WiFiClient plain;
     WiFiClient& client = https ? (WiFiClient&)secure : plain;
@@ -202,10 +211,10 @@ class Fetcher {
     http.setConnectTimeout(10000);
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
     http.setUserAgent("Fermata-ESP32/" FERMATA_VERSION);
-    if (r.user.length()) http.setAuthorization(r.user.c_str(), r.pass.c_str());
+    if (r.user.length() && url == r.direct_url) http.setAuthorization(r.user.c_str(), r.pass.c_str());
     setPhase("Mi collego al server");
     const char* headers[] = {"Date"};
-    if (!http.begin(client, r.url)) {
+    if (!http.begin(client, url)) {
       err = "URL non valido";
       return;
     }
@@ -222,6 +231,8 @@ class Fetcher {
     if (code != HTTP_CODE_OK) {
       if (code == 401) err = "Servono utente e password";
       else err = code < 0 ? "Rete: " + http.errorToString(code) : "HTTP " + String(code);
+      Serial.printf("[fetch] %s -> %s (heap libero %u, blocco max %u)\n", url.c_str(), err.c_str(),
+                    ESP.getFreeHeap(), ESP.getMaxAllocHeap());
       http.end();
       return;
     }
