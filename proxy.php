@@ -1,8 +1,4 @@
 <?php
-require __DIR__ . '/gtfs_filter.php';
-require __DIR__ . '/gtfs_static.php';
-require __DIR__ . '/gtfs_names.php';
-
 // CORS must be sent before any other output
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
