@@ -5,6 +5,10 @@ header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 header('Access-Control-Max-Age: 86400');
 
+require __DIR__ . '/gtfs_filter.php';
+require __DIR__ . '/gtfs_static.php';
+require __DIR__ . '/gtfs_names.php';
+
 // Handle preflight immediately
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
